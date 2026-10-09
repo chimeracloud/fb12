@@ -106,6 +106,17 @@ def test_race_card_six_runners(card):
     assert runners["Pina Sonata"]["exchange_price"] == 7.2
 
 
+def test_raw_passthrough_is_exactly_as_received(card):
+    mapped = map_race_card(card, "x")
+    expected_race = {k: v for k, v in card.items() if k != "runners"}
+    assert mapped["raw_race"] == expected_race
+    assert "runners" not in mapped["raw_race"]
+    assert mapped["raw_race"]["race_status"] == "declared"
+    for runner_in, runner_out in zip(card["runners"], mapped["runners"], strict=True):
+        assert runner_out["raw"] == runner_in
+        assert runner_out["raw"]["odds"] == runner_in["odds"]
+
+
 def test_same_owner_markers(card):
     runners = {r["horse"]: r for r in map_race_card(card, "x")["runners"]}
     # Wathnan Racing owns Holguin and Flora of Bermuda, with different trainers.

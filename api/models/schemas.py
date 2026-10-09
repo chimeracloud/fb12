@@ -68,11 +68,13 @@ class RunnerCard(Strict):
     best_bookmaker: str | None
     same_owner_as: list[str]
     same_trainer_too: bool
+    raw: dict[str, Any]
 
 
 class RaceCard(Strict):
     race: RaceHeader
     fetched_at: str
+    raw_race: dict[str, Any]
     runners: list[RunnerCard]
 
 

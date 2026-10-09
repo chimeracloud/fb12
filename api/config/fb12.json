@@ -10,6 +10,7 @@
     "document": "fb12"
   },
   "paper_entries_bucket": "chiops-fb12-paper-entries",
+  "recordings_bucket": "chiops-fb12-racingapi-raw",
   "racing_api": {
     "base_url": "https://api.theracingapi.com/v1"
   },
@@ -25,7 +26,8 @@
     "google": {
       "operators": [
         "cloud@ascotwm.com",
-        "admin@chimerasportstrading.com"
+        "admin@chimerasportstrading.com",
+        "fb12-recorder-scheduler@chiops.iam.gserviceaccount.com"
       ],
       "extra_audiences": [
         "32555940559.apps.googleusercontent.com"

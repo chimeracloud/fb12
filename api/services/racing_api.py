@@ -45,6 +45,7 @@ class RacingApiStats:
     last_path: str | None = None
     last_error: str | None = None
     cache_entries: int = 0
+    background_waits: int = 0
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -59,6 +60,7 @@ class RacingApiStats:
             "last_status": self.last_status,
             "last_path": self.last_path,
             "last_error": self.last_error,
+            "background_waits": self.background_waits,
         }
 
 
@@ -67,6 +69,16 @@ class CacheEntry:
     value: Any
     fetched_at: str
     expires_at: float
+
+
+@dataclass
+class Fetched:
+    """One upstream answer: parsed JSON, the body exactly as received, and when."""
+
+    data: Any
+    raw: bytes
+    fetched_at: str
+    status: int
 
 
 def _retry_after_seconds(response: httpx.Response) -> float | None:
@@ -104,6 +116,7 @@ class RacingApiClient:
         self._next_slot = 0.0
         self._cache: dict[str, CacheEntry] = {}
         self._key_locks: dict[str, asyncio.Lock] = {}
+        self._foreground_inflight = 0
 
     # --- plumbing -----------------------------------------------------------
 
@@ -137,7 +150,14 @@ class RacingApiClient:
     def forget_credentials(self) -> None:
         self._auth = None
 
-    async def _throttle(self) -> None:
+    async def _throttle(self, background: bool = False) -> None:
+        if background:
+            waited = False
+            while self._foreground_inflight > 0:
+                waited = True
+                await asyncio.sleep(0.05)
+            if waited:
+                self.stats.background_waits += 1
         rate = float(self.settings.get("request_rate_per_second") or 3.0)
         interval = 1.0 / rate
         async with self._throttle_lock:
@@ -181,19 +201,38 @@ class RacingApiClient:
                 if hit is not None and hit.expires_at > time.monotonic():
                     self.stats.cache_hits += 1
                     return hit.value, hit.fetched_at
-            data, fetched_at = await self._fetch(path, params, describe)
+            fetched = await self._fetch(path, params, describe)
             if ttl > 0:
-                self._cache[key] = CacheEntry(data, fetched_at, time.monotonic() + ttl)
+                self._cache[key] = CacheEntry(fetched.data, fetched.fetched_at, time.monotonic() + ttl)
                 self._prune_cache()
-            return data, fetched_at
+            return fetched.data, fetched.fetched_at
 
-    async def _fetch(self, path: str, params: dict[str, Any] | None, describe: str) -> tuple[Any, str]:
+    async def fetch(self, path: str, params: dict[str, Any] | None = None, *, describe: str,
+                    background: bool = False) -> Fetched:
+        """Uncached GET returning the body exactly as received. background=True yields
+        to GUI calls: it waits while any foreground request is in flight."""
+        return await self._fetch(path, params, describe, background=background)
+
+    async def _fetch(self, path: str, params: dict[str, Any] | None, describe: str,
+                     background: bool = False) -> Fetched:
         client = self._ensure_client()
         auth = await self._basic_auth()
         max_retries = int(self.settings.get("retry_on_429_max"))
         attempt = 0
+        if not background:
+            self._foreground_inflight += 1
+        try:
+            return await self._fetch_loop(client, auth, path, params, describe, max_retries, background)
+        finally:
+            if not background:
+                self._foreground_inflight -= 1
+
+    async def _fetch_loop(self, client: httpx.AsyncClient, auth: tuple[str, str], path: str,
+                          params: dict[str, Any] | None, describe: str, max_retries: int,
+                          background: bool) -> Fetched:
+        attempt = 0
         while True:
-            await self._throttle()
+            await self._throttle(background)
             self.stats.calls += 1
             self.stats.last_path = path
             self.stats.last_call_at = now_iso()
@@ -210,8 +249,8 @@ class RacingApiClient:
                 ) from exc
             duration_ms = round((time.perf_counter() - started) * 1000, 1)
             self.stats.last_status = response.status_code
-            log(logger, logging.INFO, "racing api call", path=path, status=response.status_code,
-                duration_ms=duration_ms, attempt=attempt)
+            log(logger, logging.DEBUG if background else logging.INFO, "racing api call", path=path,
+                status=response.status_code, duration_ms=duration_ms, attempt=attempt, background=background)
             if response.status_code == 429 and attempt < max_retries:
                 attempt += 1
                 self.stats.retries_429 += 1
@@ -236,7 +275,7 @@ class RacingApiClient:
                     f"The Racing API returned something that is not JSON for {describe} (HTTP {response.status_code}).",
                     response.status_code,
                 ) from exc
-            return data, now_iso()
+            return Fetched(data=data, raw=response.content, fetched_at=now_iso(), status=response.status_code)
 
     @staticmethod
     def _error(response: httpx.Response, describe: str, retries: int) -> ApiError:

@@ -69,9 +69,10 @@ def cloudflare_token(keypair, email=OPERATOR, aud=CF_AUDIENCE, iss=f"https://{CF
 @pytest.fixture
 def app(keypair, monkeypatch):
     from core.settings import MemoryBackend
+    from core.storage import MemoryStore
     import main as main_module
 
-    application = main_module.create_app(settings_backend=MemoryBackend())
+    application = main_module.create_app(settings_backend=MemoryBackend(), recordings_store=MemoryStore("test-recordings"))
     fake = FakeJWKClient(keypair.public_key)
     verifier = application.state.verifier
     monkeypatch.setattr(verifier, "_google_jwks", fake)

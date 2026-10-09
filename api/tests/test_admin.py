@@ -38,7 +38,7 @@ def test_status_shape(client, operator_headers):
 def test_settings_form_masks_credentials_and_lists_groups(client, operator_headers):
     body = client.get("/admin/settings", headers=operator_headers).json()
     groups = {g["id"]: g for g in body["groups"]}
-    assert set(groups) == {"dutch", "racing", "cache", "pace", "credentials"}
+    assert set(groups) == {"dutch", "racing", "cache", "pace", "recorder", "credentials"}
     by_key = {f["key"]: f for g in body["groups"] for f in g["fields"]}
     assert by_key["commission_rate"]["value"] == 0.02
     assert by_key["default_stake"]["value"] == 100.0

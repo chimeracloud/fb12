@@ -1,0 +1,24 @@
+{
+  "_note": "Real Racing API response shape for GET /odds/rac_32300820643/hrs_29228423, fetched 2026-10-09 09:50 UK, reduced to two bookmakers and the first and last history entries as received. Not invented.",
+  "race_id": "rac_32300820643",
+  "horse_id": "hrs_29228423",
+  "horse": "Holguin",
+  "odds": [
+    {"bookmaker": "Bet365", "fractional": "14/1", "decimal": "15", "ew_places": "2", "ew_denom": "4", "updated": "2026-10-09 09:50:22",
+     "history": [
+       {"changed_at": "2026-10-09T09:26:00+01:00", "fractional": "14/1", "decimal": "15"},
+       {"changed_at": "2026-10-09T09:18:00+01:00", "fractional": "16/1", "decimal": "17"},
+       {"changed_at": "2026-10-09T09:17:00+01:00", "fractional": "14/1", "decimal": "15"},
+       {"changed_at": "2026-10-08T17:13:00+01:00", "fractional": "11/1", "decimal": "12"},
+       {"changed_at": "2026-10-08T00:00:00+01:00", "fractional": "10/1", "decimal": "11"}
+     ]},
+    {"bookmaker": "Betfair Exchange", "fractional": "17.5", "decimal": "17.5", "ew_places": "", "ew_denom": "", "updated": "2026-10-09 09:50:22",
+     "history": [
+       {"changed_at": "2026-10-09T09:38:00+01:00", "fractional": "17.5", "decimal": "17.5"},
+       {"changed_at": "2026-10-09T09:37:00+01:00", "fractional": "17", "decimal": "17"},
+       {"changed_at": "2026-10-09T09:36:00+01:00", "fractional": "17", "decimal": "17"},
+       {"changed_at": "2026-10-08T13:58:00+01:00", "fractional": "13.5", "decimal": "13.5"},
+       {"changed_at": "2026-10-08T00:00:00+01:00", "fractional": "13", "decimal": "13"}
+     ]}
+  ]
+}

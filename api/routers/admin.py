@@ -89,6 +89,7 @@ def status_snapshot(state: Any) -> dict[str, Any]:
         "credentials": {name: credential_state(name) for name in credential_names()},
         "identity": identity_snapshot(),
         "racing_api": racing.snapshot() if racing is not None else None,
+        "recorder": state.recorder.snapshot() if getattr(state, "recorder", None) is not None else None,
         "stream": {
             "subscribers": bus.subscriber_count,
             "events_published": bus.published,
@@ -138,6 +139,7 @@ async def admin_config(request: Request) -> dict[str, Any]:
         "python": platform.python_version(),
         "racing_api": {"base_url": CONFIG.racing_api.base_url},
         "paper_entries_bucket": CONFIG.paper_entries_bucket,
+        "recordings_bucket": CONFIG.recordings_bucket,
         "firestore": CONFIG.firestore.model_dump(),
         "access": {
             "iam": "allUsers may invoke; FB12 is the gate (POL-004 / POL-006 exception, Charles, 9 October 2026)",

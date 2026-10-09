@@ -161,6 +161,7 @@ def map_race_card(card: dict[str, Any], fetched_at: str) -> dict[str, Any]:
             "best_bookmaker": best_name,
             "same_owner_as": [],
             "same_trainer_too": False,
+            "raw": runner,
         })
     declared = [r for r in mapped if r["status"] == STATUS_DECLARED]
     for runner in mapped:
@@ -184,5 +185,6 @@ def map_race_card(card: dict[str, Any], fetched_at: str) -> dict[str, Any]:
             "field_size": to_int(card.get("field_size")),
         },
         "fetched_at": fetched_at,
+        "raw_race": {k: v for k, v in card.items() if k != "runners"},
         "runners": mapped,
     }

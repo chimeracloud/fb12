@@ -8,9 +8,11 @@ from typing import Any
 
 from fastapi import APIRouter, Query, Request
 
+from core.auth import METHOD_GOOGLE
 from core.errors import ApiError
 from models.schemas import CalculateRequest, CalculateResponse, RaceCard, RaceList
 from services.dutch import calculate
+from services.recorder import parse_mode
 from services.races import UK, map_race_card, map_race_summary
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -99,3 +101,13 @@ async def post_calculate(body: CalculateRequest) -> Any:
     """The maths, nothing else: no Racing API call, nothing stored."""
     result = calculate(body.stake_total, body.commission_rate, [r.model_dump() for r in body.runners])
     return result.to_contract()
+
+
+@router.post("/record")
+async def post_record(request: Request, date: str | None = Query(None, description="YYYY-MM-DD, 'yesterday' or 'backfill'")) -> Any:
+    """Operator only: records one day of raw Racing API responses into the recordings bucket."""
+    credential = getattr(request.state, "credential", None)
+    if credential is None or credential.method != METHOD_GOOGLE:
+        raise ApiError(401, "UNAUTHENTICATED", "Not authenticated.")
+    mode, day = parse_mode(date)
+    return await request.app.state.recorder.record(mode, day, by=credential.email)

@@ -22,13 +22,15 @@ and one CHANGELOG at the root cover both.
 | API shell (admin endpoints, both credential paths) | Deployed and checked, 9 October 2026 (revision `fb12-dutch-api-00003-ztd`, version 0.1.1) | `api/` |
 | **Cloud Run URL** | **https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app** (also answers at `https://fb12-dutch-api-991649774709.europe-west1.run.app`). Prompt 2 puts this in the Pages Function's config | europe-west1 |
 | Race list and race card (`GET /api/races`, `GET /api/races/{race_id}`) | Deployed (0.2.0). Live check blocked until the service identity is fb12-sa: the default compute account cannot read the Racing API secrets | `api/services/races.py` |
-| Calculate (`POST /api/calculate`) | Pushed (0.3.0); the brief's eight test cases run in the build | `api/services/dutch.py` |
-| Move, pace, paper entries | Not started | — |
+| Calculate (`POST /api/calculate`) | Deployed and checked live against the brief's figures (0.3.0) | `api/services/dutch.py` |
+| Recorder (`POST /api/record`) | Pushed (0.4.0); waits for the recordings bucket and Charles's two Cloud Scheduler jobs | `api/services/recorder.py` |
+| Move, pace, paper entries with SP and BSP settlement | Next | — |
 | GUI | Not started (prompt 2) | `web/` |
 
-Open items for Charles after the first deploy:
-- The wizard created the service on the default compute service account. The service identity must be `fb12-sa@chiops.iam.gserviceaccount.com` (Cloud Run → fb12-dutch-api → Edit and deploy new revision → Security → Service account). Until then the Racing API secrets cannot be read, which matters from the race list onwards.
+Open items for Charles:
+- Rotate the Racing API password (it was pasted into a chat on 9 October 2026) and add it as a new version of `racingapi-password`. See docs/INCIDENTS.md.
 - The Cloud Build trigger has no included-files filter yet; `api/**` stops GUI pushes rebuilding the API.
+- Approve the recordings bucket name `chiops-fb12-racingapi-raw`, then create the two Cloud Scheduler jobs (see The recorder).
 
 Current state in detail: [docs/status/latest.md](docs/status/latest.md).
 Incidents: [docs/INCIDENTS.md](docs/INCIDENTS.md).
@@ -111,6 +113,13 @@ Cloud Run wizard settings ("Continuously deploy from a repository"):
 No environment variables are set on the service: all non-secret config is in
 the committed file, and credentials are read from Secret Manager at runtime.
 
+**One instance, always.** The service runs with max instances 1 and a 900 second
+request timeout (set with `gcloud run services update ... --max-instances 1
+--timeout 900 --service-account fb12-sa@chiops.iam.gserviceaccount.com` on
+9 October 2026). The Racing API throttle, the response cache and the recorder's
+run lock live in memory, so a second instance would double the request rate
+against a shared account and run two recordings at once. Do not raise it.
+
 ## Repository layout
 
 ```
@@ -185,11 +194,11 @@ percents (for example 103.03); times in ISO 8601 with offset. Tiers: `PROFIT`,
 
 Errors: any failure returns an HTTP error status with
 `{"error": {"code": "...", "message": "...", "upstream_status": 429}}`.
-Codes: `UPSTREAM_ERROR`, `NOT_FOUND`, `INVALID_INPUT`, `NO_RESULT_YET`. Two more
+Codes: `UPSTREAM_ERROR`, `NOT_FOUND`, `INVALID_INPUT`, `NO_RESULT_YET`. Three more
 exist in practice: `UNAUTHENTICATED` (401, body `{"error": {"code":
-"UNAUTHENTICATED", "message": "Not authenticated."}}`, no detail) and
-`INTERNAL_ERROR` (500, an unexpected exception). The message is written to be
-shown as is.
+"UNAUTHENTICATED", "message": "Not authenticated."}}`, no detail),
+`INTERNAL_ERROR` (500, an unexpected exception) and `RECORDER_BUSY` (409, a
+recording run is already in progress). The message is written to be shown as is.
 
 ### Operational endpoints
 
@@ -197,11 +206,13 @@ shown as is.
    `{"date", "races": [{"race_id", "off_dt", "off_time_uk", "course", "race_name", "pattern", "race_class", "field_size", "region"}]}`
 2. `GET /api/races/{race_id}` →
    `{"race": {"race_id", "off_dt", "off_time_uk", "course", "race_name", "pattern", "distance", "going", "field_size"}, "fetched_at", "runners": [{"horse_id", "horse", "number", "draw", "status" (DECLARED, NON_RUNNER or RESERVE), "owner", "owner_id", "trainer", "trainer_id", "jockey", "official_rating", "form", "exchange_price", "exchange_updated", "best_bookmaker_price", "best_bookmaker", "same_owner_as", "same_trainer_too"}]}`.
+   Plus, since 0.4.0: `"raw_race"` (the race object exactly as the Racing API card gives it, without `runners`) and on each runner `"raw"` (the runner object exactly as received, `odds` included). The GUI shows these in an "all fields" drawer per runner; a dash or empty string means missing, never zero. These card fields are always empty on this account and FB12 passes them through untouched and builds nothing on them: `spotlight`, `quotes`, `stable_tour`, `medical`, `rpr`, `ts`, `breeder`, `betting_forecast`.
    `exchange_price` is null when the card has no Betfair Exchange price.
    How it is built: from `GET /racecards/{race_id}/pro`. Number `NR` is `NON_RUNNER`, numbers starting `R` are `RESERVE`. `exchange_price` is the card's Betfair Exchange entry with its `updated` time; the API gives that time without an offset and FB12 reads it as UK time. `best_bookmaker_price` is the highest decimal among bookmakers, leaving out Betfair Exchange, Smarkets and Matchbook. `same_owner_as` lists the other declared runners with the same `owner_id`; `same_trainer_too` is true when one of them shares the `trainer_id`. `fetched_at` is when FB12 fetched the card from the API (a cached card keeps its fetch time).
    Race list: from `GET /racecards/pro?date=&region_codes=`; `date` defaults to today in UK time, `regions` to the setting; `pattern_only` keeps races with a pattern. Sorted by off time.
 3. `GET /api/races/{race_id}/runners/{horse_id}/move` →
-   `{"horse_id", "source" ("Betfair Exchange", "bookmaker median" or null), "first_price", "first_at", "latest_price", "latest_at", "change_pct", "direction" ("shortened", "drifted", "unchanged" or null), "note"}`
+   `{"horse_id", "source" ("bookmaker median", "Betfair Exchange" or null), "first_price", "first_at", "latest_price", "latest_at", "change_pct", "direction" ("shortened", "drifted", "unchanged" or null), "note"}`
+   Source order (decided 9 October 2026): the bookmaker median first, Betfair Exchange only when no bookmaker has history. Movement comes from `/odds/{race_id}/{horse_id}` (minute level, every bookmaker, from the evening before to the off); the card's one price per bookmaker shows no movement. "SP" and dash entries are skipped. Exchange prices outside that minute's bookmaker range are dropped (thin early books show 1.1 while bookmakers are at 16/1). Not yet built.
 4. `GET /api/races/{race_id}/runners/{horse_id}/pace?runs=5` →
    `{"horse_id", "counts": {"LED", "PROMINENT", "MIDFIELD", "HELD_UP", "UNCLASSIFIED"}, "runs": [{"date", "course", "race_name", "position", "class", "comment"}]}`, runs newest first, comment raw.
 5. `POST /api/calculate` body `{"stake_total", "commission_rate", "runners": [{"horse_id", "horse", "price", "tier", "part_fraction"}]}` →
@@ -210,9 +221,11 @@ shown as is.
    The maths: T total stake, q = 1 / price. Targets: PROFIT T + P, BREAK_EVEN T, PART part_fraction × T, OUT 0; stake = target / price, so the stakes sum to T. P = T × (1 − Σq over PROFIT and BREAK_EVEN − Σ part_fraction × q over PART) / Σq over PROFIT. No PROFIT runner or P ≤ 0: `feasible` false with the reason in `message`, and stakes, returns, nets, the profit and the expected value are null; nothing is forced. `book_pct` is Σq over every runner (every runner needs a price; if one lacks it, `message` names it and `book_pct`, `market_chance` and the expected value are null). `market_chance` = q / book. Expected value = Σ market_chance × net_if_wins, in pounds and as a percent of T. For OUT and PART runners: `break_even_chance` = E / (E + L) where E is the expected net if that runner does not win (the others' chances rescaled to sum to 1) and L the loss if it does; `can_break_even` is false and the chance null when E ≤ 0; `wins_wiped_out` = L / P. `net_after_commission` reduces a positive net by the commission rate; a loss is unchanged. Rounding: money 2 dp, chances 4 dp, percents 2 dp; the unrounded stakes sum to T exactly.
    Validation (`400 INVALID_INPUT`, every problem listed): stake_total > 0; 0 ≤ commission_rate < 1; price required unless OUT and always above 1.0; part_fraction required for PART, 0 to 1, and only for PART; no horse_id twice.
 6. `POST /api/paper` body `{"race_id", "stake_total", "commission_rate", "runners": [{"horse_id", "price", "card_price", "price_edited", "tier", "part_fraction"}]}` → `201 {"entry_id", "status": "OPEN", "saved_at", "saved_by"}`
-7. `GET /api/paper?status=` → `{"entries": [{"entry_id", "race_id", "race_name", "course", "off_dt", "saved_at", "saved_by", "status" (OPEN, SETTLED or NEEDS_REVIEW), "pnl", "pnl_after_commission", "review_reason"}]}`
-8. `GET /api/paper/{entry_id}` → the entry without the raw API responses.
-9. `POST /api/paper/{entry_id}/settle` → `{"entry_id", "status", "winner", "pnl", "pnl_after_commission", "review_reason"}`; `409 NO_RESULT_YET` when the result is not published.
+7. `GET /api/paper?status=` → `{"entries": [{"entry_id", "race_id", "race_name", "course", "off_dt", "saved_at", "saved_by", "status" (OPEN, SETTLED or NEEDS_REVIEW), "pnl", "pnl_after_commission", "pnl_at_sp", "pnl_at_bsp", "pnl_at_bsp_after_commission", "bsp_pending", "review_reason"}]}`
+8. `GET /api/paper/{entry_id}` → the entry without the raw API responses, with the same four settlement fields.
+9. `POST /api/paper/{entry_id}/settle` → `{"entry_id", "status", "winner", "pnl", "pnl_after_commission", "pnl_at_sp", "pnl_at_bsp", "pnl_at_bsp_after_commission", "bsp_pending", "review_reason"}`; `409 NO_RESULT_YET` when the result is not published.
+   Settlement (contract change of 9 October 2026 for 7, 8 and 9): settle pays the winner at the saved prices with the saved stakes, in every case. SP is in the result straight away, so `pnl_at_sp` (bookmaker SP, no commission) is set at once, using the same saved stakes. BSP lands the next day: until then `bsp_pending` is true and `pnl_at_bsp` and `pnl_at_bsp_after_commission` are null; a later settle call fills them. The GUI shows SP and BSP columns and a pending marker. Paper entries keep the card exactly as FB12 saw it at save time. Not yet built.
+10. `POST /api/record?date=` (operator only: a Google ID token from the operator list; the GUI's Cloudflare path is refused) → records one day of raw Racing API responses into the recordings bucket. `date` is `YYYY-MM-DD`, `yesterday` or `backfill` (default). Returns `{"mode", "date", "skipped", "reason", "complete", "attempts", "calls", "duration_seconds", "cards", "results", "odds", "errors", "counts": {...}, "manifest", "retried" (yesterday mode), "remaining_estimate" (backfill mode)}`. `409 RECORDER_BUSY` while a run is in progress. See The recorder.
 
 ### Admin endpoints (CHI-ADR-010, live in the shell)
 
@@ -236,6 +249,67 @@ exponential, `retry_on_429_max` times), and caches per endpoint kind with the
 `cache_*_seconds` settings. A failure comes back as `UPSTREAM_ERROR` (or
 `NOT_FOUND` for a 404) with the Racing API's status in `upstream_status` and its
 detail in the message. Counters are in `GET /admin/status` under `racing_api`.
+
+## The recorder
+
+FB12 owns its history, so every decision can be replayed and scored later.
+`POST /api/record` stores The Racing API's responses raw and untouched
+(gzip-compressed, served as JSON) in their own bucket, one object per response,
+with a manifest per day. Regions GB and IRE by default (French races carry no
+exchange prices and no running comments).
+
+What this plan gives, as documented by The Racing API on 9 October 2026, and
+what the recorder therefore asks for and nothing more:
+
+| Data | Available | Setting |
+| --- | --- | --- |
+| Pro racecards (`/racecards/pro?date=`) | from 2023-01-23 | `cards_history_from` |
+| Results (`/results?start_date=&end_date=`) | the last 12 months (the £499 historical add-on would open 2005 onwards) | `results_history_days` |
+| Odds history (`/odds/{race_id}/{horse_id}`) | from 2025-03-17 | `odds_history_from` |
+
+Layout in `gs://chiops-fb12-racingapi-raw` (name proposed, awaiting Charles; same
+settings and bindings as the paper entries bucket):
+
+```
+cards/{date}.json.gz                      the day's racecards response
+results/{date}/page-NN.json.gz            the day's results, one object per page
+odds/{date}/{race_id}/{horse_id}.json.gz  one object per runner
+manifest/{date}.json                      counts, completeness, fetch times, errors, runs
+manifest/_index.json                      per-day summary used to skip complete days
+manifest/_state.json                      availability boundaries learned from the API
+```
+
+A day counts as complete only when every result carries BSP (plus the cards and
+every runner's odds history where the plan offers them). Incomplete days are
+retried on the next run; a daily run retries the last `recorder_retry_days`
+days, the backfill gives a day `recorder_max_attempts` tries. Odds that the API
+answers 404 for are recorded as missing, not failed.
+
+Modes: `date=YYYY-MM-DD` records that day at any time. `date=yesterday` records
+yesterday (UK) and retries recent incomplete days. `date=backfill` records the
+newest day not yet complete, newest first, only inside the night window
+(`backfill_window_start_hour` to `backfill_window_end_hour`, 00:00 to 06:00 UK),
+and answers `skipped` outside it. One day per call, roughly 450 calls for a day
+with odds; the backfill is about 260,000 calls over about five nights.
+
+GUI calls go first: recorder calls are background calls that wait while any
+foreground request is in flight and share the same `request_rate_per_second`
+budget. One run at a time (`409 RECORDER_BUSY`). Progress is in
+`GET /admin/status` under `recorder` and on the stream as `recorder` events.
+
+Cloud Scheduler (Charles creates both, region europe-west1, HTTP target, method
+POST, OIDC token, service account `fb12-recorder-scheduler@chiops.iam.gserviceaccount.com`,
+audience `https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app`, attempt deadline 15 minutes,
+retries 0, time zone Europe/London):
+
+| Job | Schedule | URL |
+| --- | --- | --- |
+| `fb12-record-daily` | `0 7 * * *` | `https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app/api/record?date=yesterday` |
+| `fb12-record-backfill` | `*/3 0-5 * * *` | `https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app/api/record?date=backfill` |
+
+The scheduler account is on the operator list in the committed config; it holds
+no roles. A backfill call that finds a run still in progress gets 409 and the
+next one three minutes later picks up.
 
 ## Policies honoured
 

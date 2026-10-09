@@ -18,19 +18,23 @@ from core.errors import install_error_handlers  # noqa: E402
 from core.events import EventBus  # noqa: E402
 from core.middleware import Metrics, RequestContext  # noqa: E402
 from core.settings import FirestoreBackend, SettingsBackend, SettingsStore  # noqa: E402
+from core.storage import GcsStore, ObjectStore  # noqa: E402
 from routers import admin, api  # noqa: E402
 from services.racing_api import RacingApiClient  # noqa: E402
+from services.recorder import Recorder  # noqa: E402
 
 logger = logging.getLogger("fb12.main")
 
 
-def create_app(settings_backend: SettingsBackend | None = None) -> FastAPI:
+def create_app(settings_backend: SettingsBackend | None = None,
+               recordings_store: ObjectStore | None = None) -> FastAPI:
     metrics = Metrics()
     bus = EventBus()
     verifier = Verifier(CONFIG)
     store = SettingsStore(settings_backend or FirestoreBackend.from_config(CONFIG))
     store.on_change = lambda keys: bus.publish("settings", {"keys": keys, "updated_by": store.updated_by, "updated_at": store.updated_at})
     racing = RacingApiClient(store)
+    recorder = Recorder(racing, recordings_store or GcsStore(CONFIG.recordings_bucket), store, bus)
 
     def forward_log(entry: dict) -> None:
         bus.publish("log", entry)
@@ -64,6 +68,7 @@ def create_app(settings_backend: SettingsBackend | None = None) -> FastAPI:
     app.state.store = store
     app.state.racing = racing
     app.state.racing_stats = racing.stats
+    app.state.recorder = recorder
 
     install_error_handlers(app)
     app.include_router(admin.router)

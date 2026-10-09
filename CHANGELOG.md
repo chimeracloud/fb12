@@ -2,6 +2,24 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.4.0] — 2026-10-09 — the recorder, raw passthrough, one instance
+
+### Added
+- `POST /api/record?date=` (operator only): records one day of raw Racing API responses (racecards, every results page, every runner's odds history) into the recordings bucket, gzip, one object per response, with a per-day manifest, an index and learned availability boundaries. Modes `YYYY-MM-DD`, `yesterday` (plus retries of recent incomplete days) and `backfill` (newest incomplete day first, night window only). A day is complete only when every result carries BSP. `409 RECORDER_BUSY` while a run is in progress. Progress in `GET /admin/status` under `recorder`.
+- Recorder settings group: `cards_history_from` 2023-01-23, `odds_history_from` 2025-03-17, `results_history_days` 365 (what The Racing API documents for this plan), `backfill_earliest_date`, the backfill window hours, `recorder_retry_days`, `recorder_max_attempts`, `recorder_results_page_size`.
+- The Racing API client: `fetch()` returns the body exactly as received; background calls yield to GUI calls and share the same budget; per-call logging is DEBUG for background calls so the recorder does not swamp `/admin/logs`.
+- `core/storage.py`: one object store interface (GCS in deployment, memory in tests).
+- Contract change, endpoint 2: `raw_race` on the card and `raw` on every runner, exactly as received.
+- Committed config: `recordings_bucket` (`chiops-fb12-racingapi-raw`, name awaiting Charles's yes) and the scheduler service account `fb12-recorder-scheduler@chiops.iam.gserviceaccount.com` on the operator list.
+- Tests: the recorder end to end over real fixture responses (a real Goodwood results page with BSP on every runner; a real Holguin odds history) into an in-memory store: raw bytes stored untouched, manifests, completeness, retry re-fetching results only, 404 odds as missing, plan-limit learning, backfill window and selection, yesterday-mode retries, the busy lock, operator-only access.
+
+### Changed
+- Service settings (gcloud, 9 October 2026): `--max-instances 1 --timeout 900 --service-account fb12-sa@chiops.iam.gserviceaccount.com`. One instance always, because the throttle, cache and recorder lock live in memory. Recorded in the README.
+- README records the contract decisions of 9 October 2026 for the next steps: move's source order (bookmaker median first, exchange as fallback, SP and dash entries skipped, exchange prices outside the minute's bookmaker range dropped) and the settlement fields `pnl_at_sp`, `pnl_at_bsp`, `pnl_at_bsp_after_commission`, `bsp_pending` on endpoints 7, 8 and 9.
+
+### Infrastructure
+- `gcloud iam service-accounts create fb12-recorder-scheduler --display-name "FB12 recorder: Cloud Scheduler caller"` (no roles; Cloud Scheduler mints its OIDC token).
+
 ## [0.3.0] — 2026-10-09 — calculate, and the identity named in permission errors
 
 ### Added
