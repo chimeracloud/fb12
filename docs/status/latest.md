@@ -1,9 +1,12 @@
 # FB12 — status
 
-**Unit:** FB12 Dutch (API half). **Written:** 2026-10-09 12:40 UK, by the build agent.
+**Unit:** FB12 Dutch (API half). **Written:** 2026-10-09 12:55 UK, by the build agent.
 
-**State:** 0.3.0 pushed: calculate, plus permission errors that name the
-identity at fault. Race list and race card are deployed but blocked on the
+**State:** 0.3.0 deployed (revision `fb12-dutch-api-00007-jvd`, build 6886d5db
+green) and checked live: `POST /api/calculate` with the cautious version at 2%
+returns profit per win 12.37, book 103.03, expected value −2.94, Holguin
+0.0555 / 0.0268 / 8.08, Witness Stand 0.0882 / 0.0312, £12.13 after commission,
+a £50 loss unchanged. Permission errors now name the identity at fault. Race list and race card are deployed but blocked on the
 service identity: it runs as the default compute account, not `fb12-sa`, so the
 Racing API secrets cannot be read. Open incident: the Racing API credentials
 were pasted into the agent chat at about 12:05 UK; not used, not stored;
