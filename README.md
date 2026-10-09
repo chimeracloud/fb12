@@ -25,7 +25,8 @@ and one CHANGELOG at the root cover both.
 | Calculate (`POST /api/calculate`) | Deployed and checked live against the brief's figures (0.3.0) | `api/services/dutch.py` |
 | Recorder (`POST /api/record`) | Deployed and recording: 8 October 2026 and 17 March 2025 recorded live; Cloud Scheduler jobs created, backfill starts 00:00 UK | `api/services/recorder.py` |
 | Move, pace, paper entries with SP and BSP settlement | Next | — |
-| GUI | Not started (prompt 2) | `web/` |
+| GUI shell, race list, race page with grid and results panel, admin page | Pushed (web 0.1.0); deploys to pages.dev once Charles creates the Pages project; shows data once the subdomain and Access exist and the audience tag is set | `web/` |
+| GUI move and pace columns, paper entries page | Follow their endpoints; no placeholders in the meantime | `web/` |
 
 Open items for Charles:
 - Rotate the Racing API password (it was pasted into a chat on 9 October 2026) and add it as a new version of `racingapi-password`. See docs/INCIDENTS.md.
@@ -118,6 +119,58 @@ request timeout (set with `gcloud run services update ... --max-instances 1
 run lock live in memory, so a second instance would double the request rate
 against a shared account and run two recordings at once. Do not raise it.
 
+## The GUI
+
+A standalone React, Vite and TypeScript app in `web/`, on Cloudflare Pages, on a
+chimerasportstrading.com subdomain behind Cloudflare Access. Paper only. It
+never calculates: every stake, profit, chance and expected value on screen comes
+from `POST /api/calculate`. Theme: background `#06060a`, gold `#b8924a`, cream
+`#e8e0d0`; Cormorant Garamond for headings, Rajdhani for the UI, JetBrains Mono
+for figures. Header "Chimera Sports Trading | FB12 Dutch", footer "Born from
+complexity. Engineered for certainty."
+
+The browser never sees FB12's Cloud Run URL. Every `/api` and `/admin` call goes
+to a Pages Function on the same hostname (`web/functions/api/[[path]].ts`,
+`web/functions/admin/[[path]].ts`), which forwards method, path, query and body
+to the API with the `Cf-Access-Jwt-Assertion` header Cloudflare adds, drops any
+`Authorization` header or cookie the browser sends, and returns the API's status
+and body unchanged, streams included. The API URL is the committed constant in
+`web/functions/_config.ts`, built by Pages, never by Vite.
+
+Pages project settings (Charles creates the project; the first push after that
+deploys the shell to its pages.dev address):
+
+| Setting | Value |
+| --- | --- |
+| Repository, production branch | `chimeracloud/fb12`, `main` |
+| Root directory | `web` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Environment variable | `NODE_VERSION` = `22` |
+| Build watch paths | Include `web/*` (Cloudflare's `*` matches nested paths), so API pushes do not rebuild the GUI |
+
+Until the subdomain and its Access application exist, calls through the pages.dev
+address carry no Access token and the API answers 401; the GUI shows that error
+as returned. That is expected.
+
+Access (Charles creates it after the first deploy): a self-hosted Access
+application covering the whole subdomain, the same policy as the CST portal, no
+bypass rules. Its audience tag and the team domain
+(`chimerasportstrading.cloudflareaccess.com` per the June inventory) then go into
+`api/config/fb12.json` under `access.cloudflare` and are pushed; the trigger
+redeploys the API and the Cloudflare path opens.
+
+Pages: Races (date in UK time, GB and IRE toggles, pattern races only; a row opens
+the race), Race (header; total stake and commission from FB12's settings; presets
+"Top two only" and "Four horses" on the prices in use; the runner grid with an
+editable exchange price beside the card price and its updated time, best
+bookmaker, owner, trainer, official rating, same-owner marker, tier with a PART
+fraction, and an "all fields" drawer per runner and for the race; the results
+panel, recalculated 300 ms after every change with the last figures dimmed while
+a call is in flight), Admin (health, status, the settings form built from the
+field definitions, config, logs, live stream). Move and pace columns and the
+paper entries page arrive with their endpoints.
+
 ## Repository layout
 
 ```
@@ -139,7 +192,18 @@ api/
   Dockerfile           base -> test -> runtime
 docs/INCIDENTS.md      incident log (CHI-POL-048)
 docs/status/latest.md  where the unit is now (CHI-POL-053)
-web/                   the GUI (prompt 2)
+web/
+  package.json         React 18, Vite 5, TypeScript, react-router
+  index.html           the shell; Google Fonts for the three typefaces
+  functions/_config.ts the API's Cloud Run URL (committed, never in the bundle)
+  functions/_lib/proxy.ts  the forwarding logic
+  functions/api/[[path]].ts, functions/admin/[[path]].ts  the Pages Functions
+  src/api/client.ts    same-origin fetch with the error envelope
+  src/api/types.ts     the contract as TypeScript types
+  src/lib/format.ts    money with losses in brackets, odds, percents, UK time
+  src/pages/           RaceListPage, RacePage, AdminPage
+  src/components/      ResultsPanel, SettingsFormView, RawDrawer, ErrorBox
+  src/theme.css        the Chimera dark theme
 ```
 
 ## Configuration

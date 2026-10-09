@@ -2,6 +2,14 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [web 0.1.0] — 2026-10-09 — GUI shell, race list, race page, results panel, admin
+
+### Added
+- `web/`: React, Vite and TypeScript app for Cloudflare Pages. Pages Functions for `/api` and `/admin` forward to the API with the Cloudflare Access token, drop browser Authorization headers, and return status and body unchanged; the API URL is a committed constant in `web/functions/_config.ts`.
+- Races page: date (UK), GB and IRE toggles, pattern races only; rows open the race. Race page: header with fetch time, stake and commission from FB12's settings, presets, the runner grid (editable exchange price with card price and reset, best bookmaker, owner, trainer, OR, same-owner marker, tier with PART fraction, non runners and reserves locked, an "all fields" drawer per runner and for the race). Results panel: `POST /api/calculate` 300 ms after every change, last figures dimmed while in flight, per-runner and summary figures, break-even and wipe-out for OUT and PART, the API's message when infeasible or a price is missing. Admin page: health, status, settings form from the field definitions (PUT of changed fields, secrets masked), config, logs, live stream.
+- Formats: decimal odds to two places, money with losses in brackets, chances as percents, UK times. Errors shown as the API returns them, with a retry.
+- Left for their endpoints, with no placeholders: move and pace columns, the paper entries page and "Save as paper entry".
+
 ## [0.4.2] — 2026-10-09 — backfill: 7-day BSP rule, once a night, budgeted calls
 
 ### Changed

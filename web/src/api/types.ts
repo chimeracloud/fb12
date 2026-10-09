@@ -1,0 +1,160 @@
+// The API contract (README, "API contract"). Field names are the API's; the GUI never
+// calculates, it renders what these carry.
+
+export type Tier = "PROFIT" | "BREAK_EVEN" | "PART" | "OUT";
+export type RunnerStatus = "DECLARED" | "NON_RUNNER" | "RESERVE";
+
+export interface RaceSummary {
+  race_id: string;
+  off_dt: string | null;
+  off_time_uk: string | null;
+  course: string | null;
+  race_name: string | null;
+  pattern: string | null;
+  race_class: string | null;
+  field_size: number | null;
+  region: string | null;
+}
+
+export interface RaceList {
+  date: string;
+  races: RaceSummary[];
+}
+
+export interface RaceHeader {
+  race_id: string;
+  off_dt: string | null;
+  off_time_uk: string | null;
+  course: string | null;
+  race_name: string | null;
+  pattern: string | null;
+  distance: string | null;
+  going: string | null;
+  field_size: number | null;
+}
+
+export interface RunnerCard {
+  horse_id: string;
+  horse: string;
+  number: string;
+  draw: number | null;
+  status: RunnerStatus;
+  owner: string | null;
+  owner_id: string | null;
+  trainer: string | null;
+  trainer_id: string | null;
+  jockey: string | null;
+  official_rating: number | null;
+  form: string | null;
+  exchange_price: number | null;
+  exchange_updated: string | null;
+  best_bookmaker_price: number | null;
+  best_bookmaker: string | null;
+  same_owner_as: string[];
+  same_trainer_too: boolean;
+  raw: Record<string, unknown>;
+}
+
+export interface RaceCard {
+  race: RaceHeader;
+  fetched_at: string;
+  raw_race: Record<string, unknown>;
+  runners: RunnerCard[];
+}
+
+export interface CalculateRunnerIn {
+  horse_id: string;
+  horse: string;
+  price: number | null;
+  tier: Tier;
+  part_fraction: number | null;
+}
+
+export interface CalculateRequest {
+  stake_total: number;
+  commission_rate: number;
+  runners: CalculateRunnerIn[];
+}
+
+export interface CalculateRunnerOut {
+  horse_id: string;
+  horse: string;
+  tier: Tier;
+  price: number | null;
+  stake: number | null;
+  return_if_wins: number | null;
+  net_if_wins: number | null;
+  net_after_commission: number | null;
+  market_chance: number | null;
+  break_even_chance: number | null;
+  can_break_even: boolean | null;
+  wins_wiped_out: number | null;
+}
+
+export interface CalculateResponse {
+  feasible: boolean;
+  message: string | null;
+  profit_per_win: number | null;
+  book_pct: number | null;
+  expected_value_gbp: number | null;
+  expected_value_pct: number | null;
+  runners: CalculateRunnerOut[];
+}
+
+// Admin (CHI-ADR-010), shapes as the API documents them in the README.
+export interface SettingsField {
+  key: string;
+  label: string;
+  type: "number" | "integer" | "boolean" | "string" | "list" | "secret";
+  value: unknown;
+  default?: unknown;
+  writable: boolean;
+  help?: string;
+  min?: number | null;
+  max?: number | null;
+  step?: number | null;
+  secret?: string | null;
+  state?: string;
+}
+
+export interface SettingsGroup {
+  id: string;
+  label: string;
+  fields: SettingsField[];
+}
+
+export interface SettingsForm {
+  service: string;
+  unit: string;
+  storage: { backend: string; path: string | null };
+  source: string;
+  updated_at: string | null;
+  updated_by: string | null;
+  last_loaded_at: string | null;
+  last_error: string | null;
+  groups: SettingsGroup[];
+}
+
+export interface SettingsPutResponse {
+  applied: string[];
+  rejected: { key: string; reason: string }[];
+  settings: SettingsForm;
+}
+
+export interface LogEntry {
+  seq: number;
+  timestamp: string;
+  severity: string;
+  message: string;
+  [key: string]: unknown;
+}
+
+export interface LogsResponse {
+  entries: LogEntry[];
+  count: number;
+  next_before: number | null;
+}
+
+export type Health = Record<string, unknown> & { status: string; version: string; revision: string | null; time: string };
+export type Status = Record<string, unknown>;
+export type Config = Record<string, unknown>;
