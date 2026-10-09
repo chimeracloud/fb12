@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { CalculateResponse, CalculateRunnerOut, PaperCreated, RunnerCard } from "../api/types";
+import type { CalculateResponse, CalculateRunnerOut, PaperCreated, Preset, RunnerCard } from "../api/types";
 import ErrorBox from "./ErrorBox";
 import { money, pct, pctValue, times } from "../lib/format";
 
@@ -15,7 +16,13 @@ interface Props {
   saving: boolean;
   saved: PaperCreated | null;
   saveError: unknown;
+  trial: boolean;
+  offDt: string | null;
+  preset: Preset;
+  stakeTotal: number | null;
 }
+
+const PRESET_LABEL: Record<Preset, string> = { top_two: "Top two only", four_horses: "Four horses", custom: "Custom tiers" };
 
 function signed(value: number | null): JSX.Element {
   if (value === null) return <span className="muted">—</span>;
@@ -23,7 +30,10 @@ function signed(value: number | null): JSX.Element {
 }
 
 // Every figure here comes from POST /api/calculate. The GUI never calculates.
-export default function ResultsPanel({ result, error, calculating, runners, resultsByHorse, onRetry, pending, onSave, saving, saved, saveError }: Props) {
+export default function ResultsPanel({ result, error, calculating, runners, resultsByHorse, onRetry, pending, onSave, saving, saved, saveError, trial, offDt, preset, stakeTotal }: Props) {
+  const [slipOpen, setSlipOpen] = useState(false);
+  const afterOff = offDt !== null && new Date(offDt).getTime() <= Date.now();
+  const backed = runners.map((r) => resultsByHorse[r.horse_id]).filter((r): r is CalculateRunnerOut => Boolean(r) && (r as CalculateRunnerOut).tier !== "OUT");
   return (
     <div className="panel">
       <h2>Results</h2>
@@ -97,16 +107,71 @@ export default function ResultsPanel({ result, error, calculating, runners, resu
           </table>
           <p className="small muted">{calculating ? "Recalculating…" : "Figures from POST /api/calculate."}</p>
           <div className="toolbar">
-            <button className="primary" onClick={onSave} disabled={saving || calculating || !result.feasible}>
-              {saving ? "Saving…" : "Save as paper entry"}
+            <button className="primary" onClick={() => setSlipOpen(true)} disabled={saving || calculating || !result.feasible || slipOpen || (afterOff && !trial)}>
+              {trial ? "Save trial" : "Place paper bet"}
             </button>
+            {afterOff && !trial && <span className="small loss">The race is off: bets are refused after the off. Typed prices save as a trial.</span>}
+            {trial && <span className="badge warn">trial: typed prices, kept out of the totals</span>}
             {saved && (
               <span>
-                Saved as <span className="mono">{saved.entry_id}</span> by {saved.saved_by}. <Link to={`/paper/${saved.entry_id}`}>Open it</Link> ·{" "}
-                <Link to="/paper">all entries</Link>
+                {saved.kind === "BET" ? "Bet placed" : "Trial saved"} as <span className="mono">{saved.entry_id}</span> by {saved.saved_by}
+                {saved.minutes_before_off !== null ? `, ${saved.minutes_before_off.toFixed(1)} min before the off` : ""}.{" "}
+                <Link to={`/paper/${saved.entry_id}`}>Open it</Link> · <Link to="/paper">all entries</Link>
               </span>
             )}
           </div>
+          {slipOpen && (
+            <div className="panel" style={{ borderColor: "var(--gold)" }}>
+              <h3>{trial ? "Trial slip" : "Bet slip"}</h3>
+              <p className="small muted">
+                {PRESET_LABEL[preset]} · total stake {money(stakeTotal)} · {trial ? "typed prices (trial)" : "live exchange prices as shown now"} ·{" "}
+                {offDt ? `off ${new Date(offDt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })} UK` : "no off time"}
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Horse</th>
+                    <th>Tier</th>
+                    <th className="num">Price</th>
+                    <th className="num">Stake</th>
+                    <th className="num">Return if wins</th>
+                    <th className="num">Net if wins</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {backed.map((r) => (
+                    <tr key={r.horse_id}>
+                      <td>{r.horse}</td>
+                      <td className={"tier-" + r.tier}>{r.tier.replace("_", " ")}</td>
+                      <td className="num">{r.price === null ? "—" : r.price.toFixed(2)}</td>
+                      <td className="num">{money(r.stake)}</td>
+                      <td className="num">{money(r.return_if_wins)}</td>
+                      <td className="num">{signed(r.net_if_wins)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="small muted">
+                Profit per PROFIT win {money(result.profit_per_win)} · book {pctValue(result.book_pct)} · expected value {money(result.expected_value_gbp)}.
+                {runners.length - backed.length > 0 ? ` ${runners.length - backed.length} runners OUT with no stake.` : ""}
+              </p>
+              <div className="toolbar">
+                <button
+                  className="primary"
+                  disabled={saving}
+                  onClick={() => {
+                    setSlipOpen(false);
+                    onSave();
+                  }}
+                >
+                  {saving ? "Placing…" : trial ? "Confirm trial" : "Confirm paper bet"}
+                </button>
+                <button onClick={() => setSlipOpen(false)} disabled={saving}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           {saveError && <ErrorBox error={saveError} onRetry={onSave} />}
         </div>
       )}

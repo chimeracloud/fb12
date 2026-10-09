@@ -208,8 +208,9 @@ async def post_paper(body: PaperRequest, request: Request) -> Any:
 
 
 @router.get("/paper", response_model=PaperList)
-async def list_paper(request: Request, status: str | None = Query(None, description="OPEN, SETTLED or NEEDS_REVIEW")) -> Any:
-    return {"entries": await request.app.state.paper.list(status)}
+async def list_paper(request: Request, status: str | None = Query(None, description="OPEN, SETTLED or NEEDS_REVIEW"),
+                     kind: str | None = Query(None, description="BET or TRIAL")) -> Any:
+    return {"entries": await request.app.state.paper.list(status, kind)}
 
 
 @router.get("/paper/{entry_id}")

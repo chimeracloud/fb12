@@ -60,8 +60,14 @@ export default function PaperEntryPage() {
       </p>
       <h1>{entry.race.race_name ?? entry.race.race_id}</h1>
       <p className="muted">
-        {entry.race.course ?? "—"} · {entry.race.off_time_uk ?? "—"} UK · saved {ukDateTime(entry.saved_at)} UK by {entry.saved_by} ·{" "}
+        {entry.race.course ?? "—"} · {entry.race.pattern ?? "no grade"} · off {entry.race.off_time_uk ?? "—"} UK ·{" "}
+        <span className={"badge" + (entry.kind === "TRIAL" ? " warn" : "")}>{entry.kind === "TRIAL" ? "trial: typed prices, out of the totals" : "paper bet"}</span>{" "}
         <span className={"badge" + (entry.status === "NEEDS_REVIEW" ? " warn" : "")}>{entry.status.replace("_", " ")}</span>
+      </p>
+      <p className="small muted">
+        Placed {ukDateTime(entry.placed_at)} UK by {entry.placed_by}
+        {entry.minutes_before_off !== null ? `, ${entry.minutes_before_off.toFixed(1)} minutes ${entry.minutes_before_off >= 0 ? "before" : "after"} the off` : ""} ·{" "}
+        {entry.preset ? entry.preset.replace("_", " ") : "custom"} · expected profit at market odds when placed {money(entry.expected_profit_gbp)}
       </p>
       <p className="small muted">
         Card as FB12 saw it at {ukDateTime(entry.race.card_fetched_at)} UK · stake {money(entry.inputs.stake_total)} · commission {pct(entry.inputs.commission_rate)} ·{" "}
@@ -159,6 +165,10 @@ export default function PaperEntryPage() {
                 <div className="stat">
                   <span className="label">At SP {s.winner_sp_dec ? `(${odds(s.winner_sp_dec)})` : ""}</span>
                   <span className="value">{signed(s.pnl_at_sp)}</span>
+                </div>
+                <div className="stat">
+                  <span className="label">At SP after commission</span>
+                  <span className="value">{signed(s.pnl_at_sp_after_commission)}</span>
                 </div>
                 <div className="stat">
                   <span className="label">At BSP {s.winner_bsp ? `(${odds(s.winner_bsp)})` : ""}</span>

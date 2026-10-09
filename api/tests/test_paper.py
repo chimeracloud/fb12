@@ -45,12 +45,13 @@ def credentials_from_memory(monkeypatch):
 class Upstream:
     def __init__(self) -> None:
         self.result: dict | None = None  # None: not published yet
+        self.card: dict = CARD
         self.calls: list[str] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.calls.append(request.url.path)
         if request.url.path == f"/v1/racecards/{RACE}/pro":
-            return httpx.Response(200, json=CARD)
+            return httpx.Response(200, json=self.card)
         if request.url.path == f"/v1/results/{RACE}":
             if self.result is None:
                 return httpx.Response(404, json={"detail": "Not Found"})
@@ -77,8 +78,9 @@ def test_save_list_and_read_back(paper_app, client, operator_headers):
     created = client.post("/api/paper", json=CAUTIOUS, headers=operator_headers)
     assert created.status_code == 201, created.text
     body = created.json()
-    assert set(body) == {"entry_id", "status", "saved_at", "saved_by"}
+    assert set(body) == {"entry_id", "status", "saved_at", "saved_by", "kind", "minutes_before_off"}
     assert body["status"] == "OPEN" and body["saved_by"] == "cloud@ascotwm.com" and body["entry_id"].startswith("pe_")
+    assert body["kind"] == "TRIAL"  # typed prices: a trial, kept out of the totals
     entry_id = body["entry_id"]
 
     listing = client.get("/api/paper", headers=operator_headers).json()
@@ -88,6 +90,10 @@ def test_save_list_and_read_back(paper_app, client, operator_headers):
     assert item["entry_id"] == entry_id and item["status"] == "OPEN" and item["course"] == "Newmarket"
     assert item["race_name"].startswith("Thoroughbred Industry") and item["off_dt"] == "2026-10-09T14:25:00+01:00"
     assert item["pnl"] is None and item["bsp_pending"] is None and item["review_reason"] is None
+    assert item["kind"] == "TRIAL" and item["pattern"] == "Group 2" and item["stake_total"] == 100 and item["preset"] == "custom"
+    assert item["expected_profit_gbp"] == pytest.approx(-2.94, abs=0.005)
+    assert client.get("/api/paper?kind=TRIAL", headers=operator_headers).json()["entries"][0]["entry_id"] == entry_id
+    assert client.get("/api/paper?kind=BET", headers=operator_headers).json()["entries"] == []
     assert client.get("/api/paper?status=OPEN", headers=operator_headers).json()["entries"][0]["entry_id"] == entry_id
     assert client.get("/api/paper?status=SETTLED", headers=operator_headers).json()["entries"] == []
     assert client.get("/api/paper?status=nonsense", headers=operator_headers).status_code == 400
@@ -98,7 +104,11 @@ def test_save_list_and_read_back(paper_app, client, operator_headers):
     assert entry["inputs"]["stake_total"] == 100 and entry["inputs"]["commission_rate"] == 0.02
     flora = next(r for r in entry["inputs"]["runners"] if r["horse_id"] == "hrs_35445375")
     assert flora == {"horse_id": "hrs_35445375", "horse": "Flora of Bermuda", "price": 2.94, "card_price": 2.78,
+                     "card_price_at_save": 2.78, "card_price_updated_at_save": "2026-10-09T09:53:06+01:00",
                      "price_edited": True, "tier": "PROFIT", "part_fraction": None}
+    assert entry["kind"] == "TRIAL" and entry["trial"] is True and entry["placed_by"] == "cloud@ascotwm.com"
+    assert entry["race"]["pattern"] == "Group 2" and entry["race"]["field_size"] == 6
+    assert entry["expected_profit_gbp"] == entry["figures"]["expected_value_gbp"]
     # The figures are the calculate function's, not anything the browser sent.
     expected = calculate(100, 0.02, [
         {"horse_id": r["horse_id"], "horse": next(c["horse"] for c in CARD["runners"] if c["horse_id"] == r["horse_id"]),
@@ -110,6 +120,66 @@ def test_save_list_and_read_back(paper_app, client, operator_headers):
     stored = json.loads(paper_app.state.paper.store.objects[entry_key(entry_id)][0])
     assert stored["raw_card"] == CARD and stored["raw_result"] is None
     assert stored["race"]["card_fetched_at"]
+
+
+def live_bet(off_dt: str | None = None, preset: str | None = "top_two") -> dict:
+    """The dutch at the card's live exchange prices: Flora and Time To Turn PROFIT, the rest OUT."""
+    prices = {r["horse_id"]: next(o for o in r["odds"] if o["bookmaker"] == "Betfair Exchange")["decimal"] for r in CARD["runners"]}
+    tiers = {"hrs_35445375": "PROFIT", "hrs_52830953": "PROFIT"}
+    body = {
+        "race_id": RACE, "stake_total": 50, "commission_rate": 0.02, "preset": preset,
+        "runners": [{"horse_id": hid, "price": float(p), "card_price": float(p), "price_edited": False, "tier": tiers.get(hid, "OUT")}
+                    for hid, p in prices.items()],
+    }
+    return body
+
+
+@pytest.fixture
+def future_card(upstream):
+    """The same real card with its off time moved to tomorrow, so a bet is before the off."""
+    from datetime import datetime, timedelta, timezone
+
+    future = json.loads(json.dumps(CARD))
+    off = datetime.now(timezone.utc) + timedelta(hours=26)
+    future["off_dt"] = off.isoformat(timespec="seconds")
+    future["date"] = off.date().isoformat()
+    upstream.card = future
+    return future
+
+
+def test_live_prices_place_a_bet_with_its_timing(paper_app, client, operator_headers, upstream, future_card):
+    created = client.post("/api/paper", json=live_bet(), headers=operator_headers)
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["kind"] == "BET"
+    assert 25 * 60 < body["minutes_before_off"] <= 26 * 60
+    entry = client.get(f"/api/paper/{body['entry_id']}", headers=operator_headers).json()
+    assert entry["kind"] == "BET" and entry["trial"] is False and entry["preset"] == "top_two"
+    assert entry["placed_at"] == entry["saved_at"] and entry["placed_by"] == "cloud@ascotwm.com"
+    assert entry["minutes_before_off"] == body["minutes_before_off"]
+    flora = next(r for r in entry["inputs"]["runners"] if r["horse_id"] == "hrs_35445375")
+    assert flora["price"] == 2.78 and flora["card_price_at_save"] == 2.78 and flora["price_edited"] is False
+    assert entry["figures"]["feasible"] is True
+    listing = client.get("/api/paper?kind=BET", headers=operator_headers).json()["entries"]
+    assert listing[0]["kind"] == "BET" and listing[0]["minutes_before_off"] == body["minutes_before_off"]
+
+
+def test_bets_after_the_off_are_refused_but_trials_are_not(paper_app, client, operator_headers):
+    # The real card: off 14:25 UK on 9 October 2026, which is in the past for every build after it.
+    refused = client.post("/api/paper", json=live_bet(), headers=operator_headers)
+    assert refused.status_code == 400
+    assert "went off at 14:25 UK; bets after the off are refused" in refused.json()["error"]["message"]
+    assert client.get("/api/paper", headers=operator_headers).json()["entries"] == []
+    trial = client.post("/api/paper", json=CAUTIOUS, headers=operator_headers)
+    assert trial.status_code == 201 and trial.json()["kind"] == "TRIAL"
+    assert trial.json()["minutes_before_off"] < 0
+
+
+def test_preset_is_validated(paper_app, client, operator_headers, future_card):
+    assert client.post("/api/paper", json=live_bet(preset="nonsense"), headers=operator_headers).status_code == 400
+    assert client.post("/api/paper", json=live_bet(preset=None), headers=operator_headers).json()["kind"] == "BET"
+    entries = client.get("/api/paper", headers=operator_headers).json()["entries"]
+    assert entries[0]["preset"] == "custom"
 
 
 def test_save_rejects_bad_entries(paper_app, client, operator_headers):
@@ -186,6 +256,7 @@ def test_work_out_pays_the_winner_at_saved_prices_and_at_sp_and_bsp():
     assert settlement["pnl_after_commission"] == pytest.approx(lake["net_if_wins"] * 0.98, abs=0.005)
     # Same saved stake at bookmaker SP 1.91 (the saved price here, so the same figure), no commission.
     assert settlement["pnl_at_sp"] == pytest.approx(lake["stake"] * 1.91 - 100, abs=0.01)
+    assert settlement["pnl_at_sp_after_commission"] == pytest.approx((lake["stake"] * 1.91 - 100) * 0.98, abs=0.01)
     # And at BSP 2.05, before and after commission.
     assert settlement["pnl_at_bsp"] == pytest.approx(lake["stake"] * 2.05 - 100, abs=0.01)
     assert settlement["pnl_at_bsp_after_commission"] == pytest.approx((lake["stake"] * 2.05 - 100) * 0.98, abs=0.01)
@@ -211,6 +282,7 @@ def test_work_out_loss_when_the_winner_is_not_in_the_entry_or_is_out():
     assert settlement["status"] == "SETTLED" and settlement["winner_tier"] == "OUT"
     assert settlement["pnl"] == -100.0 and settlement["pnl_after_commission"] == -100.0
     assert settlement["pnl_at_sp"] == -100.0 and settlement["pnl_at_bsp"] == -100.0  # a zero stake wins nothing at any price
+    assert settlement["pnl_at_sp_after_commission"] == -100.0
     absent = goodwood_entry([runner("Witness Stand (GB)", "PROFIT"), runner("Qirat (GB)", "PROFIT")])
     settlement = PaperStore.work_out(absent, GOODWOOD)
     assert settlement["winner_in_entry"] is False and settlement["pnl"] == -100.0 and settlement["winner_stake"] == 0.0
@@ -237,7 +309,9 @@ def test_settle_twice_is_idempotent_once_bsp_is_in(paper_app, upstream):
     store = paper_app.state.paper
     entry = goodwood_entry([runner("Lake Forest (GB)", "PROFIT"), runner("Rogue Diplomat (IRE)", "PROFIT"), runner("Holguin (GB)", "OUT")])
     entry.update({"entry_id": "pe_20260728T150000_abc123", "saved_at": "2026-07-28T13:00:00+00:00", "saved_by": "cloud@ascotwm.com",
-                  "race": {"race_id": RACE, "race_name": "Lennox Stakes", "course": "Goodwood", "off_dt": "2026-07-28T15:00:00+01:00"},
+                  "kind": "BET", "trial": False, "placed_at": "2026-07-28T13:00:00+00:00", "placed_by": "cloud@ascotwm.com",
+                  "minutes_before_off": 60.0, "preset": "custom", "expected_profit_gbp": None, "expected_profit_pct": None,
+                  "race": {"race_id": RACE, "race_name": "Lennox Stakes", "course": "Goodwood", "off_dt": "2026-07-28T15:00:00+01:00", "pattern": "Group 2"},
                   "settlement": None, "result_summary": None, "raw_card": {}, "raw_result": None})
 
     async def run():

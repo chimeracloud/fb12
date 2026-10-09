@@ -13,6 +13,7 @@ function signed(value: number | null): JSX.Element {
 export default function PaperPage() {
   const [params, setParams] = useSearchParams();
   const status = (params.get("status") ?? "") as PaperStatus | "";
+  const kind = params.get("kind") ?? "";
   const [entries, setEntries] = useState<PaperListItem[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
@@ -23,14 +24,17 @@ export default function PaperPage() {
     setLoading(true);
     setError(null);
     try {
-      const query = status ? `?status=${status}` : "";
-      setEntries((await api<{ entries: PaperListItem[] }>(`/api/paper${query}`)).entries);
+      const query = new URLSearchParams();
+      if (status) query.set("status", status);
+      if (kind) query.set("kind", kind);
+      const text = query.toString();
+      setEntries((await api<{ entries: PaperListItem[] }>(`/api/paper${text ? "?" + text : ""}`)).entries);
     } catch (e) {
       setError(e);
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, [status, kind]);
 
   useEffect(() => {
     void load();
@@ -60,11 +64,35 @@ export default function PaperPage() {
       <div className="toolbar">
         <label className="field">
           Status
-          <select value={status} onChange={(e) => setParams(e.target.value ? { status: e.target.value } : {}, { replace: true })}>
+          <select
+            value={status}
+            onChange={(e) => {
+              const next = new URLSearchParams(params);
+              if (e.target.value) next.set("status", e.target.value);
+              else next.delete("status");
+              setParams(next, { replace: true });
+            }}
+          >
             <option value="">All</option>
             <option value="OPEN">Open</option>
             <option value="SETTLED">Settled</option>
             <option value="NEEDS_REVIEW">Needs review</option>
+          </select>
+        </label>
+        <label className="field">
+          Kind
+          <select
+            value={kind}
+            onChange={(e) => {
+              const next = new URLSearchParams(params);
+              if (e.target.value) next.set("kind", e.target.value);
+              else next.delete("kind");
+              setParams(next, { replace: true });
+            }}
+          >
+            <option value="">Bets and trials</option>
+            <option value="BET">Bets</option>
+            <option value="TRIAL">Trials</option>
           </select>
         </label>
         <button className="small" onClick={() => void load()} disabled={loading}>
@@ -81,9 +109,13 @@ export default function PaperPage() {
               <th>Race</th>
               <th>Course</th>
               <th>Off (UK)</th>
-              <th>Saved (UK)</th>
-              <th>Saved by</th>
+              <th>Placed (UK)</th>
+              <th className="num">Before off</th>
+              <th>By</th>
+              <th>Kind</th>
               <th>Status</th>
+              <th className="num">Staked</th>
+              <th className="num">Expected</th>
               <th className="num">P&L</th>
               <th className="num">After commission</th>
               <th className="num">At SP</th>
@@ -100,14 +132,24 @@ export default function PaperPage() {
                   {entry.status === "NEEDS_REVIEW" && entry.review_reason && <div className="small loss">{entry.review_reason}</div>}
                   {messages[entry.entry_id] && <div className="small muted">{messages[entry.entry_id]}</div>}
                 </td>
-                <td>{entry.course ?? "—"}</td>
+                <td>
+                  {entry.course ?? "—"}
+                  {entry.pattern && <div className="small muted">{entry.pattern}</div>}
+                </td>
                 <td className="num">{ukTime(entry.off_dt)}</td>
-                <td className="num">{ukDateTime(entry.saved_at)}</td>
+                <td className="num">{ukDateTime(entry.placed_at)}</td>
+                <td className="num">{entry.minutes_before_off === null ? "—" : `${entry.minutes_before_off.toFixed(0)} min`}</td>
                 <td>{entry.saved_by}</td>
+                <td>
+                  <span className={"badge" + (entry.kind === "TRIAL" ? " warn" : "")}>{entry.kind === "TRIAL" ? "trial" : "bet"}</span>
+                  {entry.preset && entry.preset !== "custom" && <div className="small muted">{entry.preset.replace("_", " ")}</div>}
+                </td>
                 <td>
                   <span className={"badge" + (entry.status === "NEEDS_REVIEW" ? " warn" : "")}>{entry.status.replace("_", " ")}</span>
                   {entry.bsp_pending && <span className="badge"> BSP pending</span>}
                 </td>
+                <td className="num">{money(entry.stake_total)}</td>
+                <td className="num">{signed(entry.expected_profit_gbp)}</td>
                 <td className="num">{signed(entry.pnl)}</td>
                 <td className="num">{signed(entry.pnl_after_commission)}</td>
                 <td className="num">{signed(entry.pnl_at_sp)}</td>

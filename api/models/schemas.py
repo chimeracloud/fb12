@@ -175,11 +175,16 @@ class PaperRunnerIn(Strict):
     part_fraction: float | None = None
 
 
+Preset = Literal["top_two", "four_horses", "custom"]
+PaperKind = Literal["BET", "TRIAL"]
+
+
 class PaperRequest(Strict):
     race_id: str
     stake_total: float
     commission_rate: float
     runners: list[PaperRunnerIn]
+    preset: Preset | None = None
 
 
 class PaperCreated(Strict):
@@ -187,6 +192,8 @@ class PaperCreated(Strict):
     status: Literal["OPEN"]
     saved_at: str
     saved_by: str
+    kind: PaperKind
+    minutes_before_off: float | None
 
 
 class PaperListItem(Strict):
@@ -195,12 +202,21 @@ class PaperListItem(Strict):
     race_name: str | None
     course: str | None
     off_dt: str | None
+    pattern: str | None
     saved_at: str
     saved_by: str
     status: PaperStatus
+    kind: PaperKind
+    placed_at: str
+    minutes_before_off: float | None
+    preset: str | None
+    stake_total: float
+    expected_profit_gbp: float | None
+    winner: str | None
     pnl: float | None
     pnl_after_commission: float | None
     pnl_at_sp: float | None
+    pnl_at_sp_after_commission: float | None
     pnl_at_bsp: float | None
     pnl_at_bsp_after_commission: float | None
     bsp_pending: bool | None
@@ -218,6 +234,7 @@ class SettleResponse(Strict):
     pnl: float | None
     pnl_after_commission: float | None
     pnl_at_sp: float | None
+    pnl_at_sp_after_commission: float | None
     pnl_at_bsp: float | None
     pnl_at_bsp_after_commission: float | None
     bsp_pending: bool | None

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { CalculateRequest, CalculateResponse, PaperCreated, PaperRequest, RaceCard, RunnerCard, SettingsForm, Tier } from "../api/types";
+import type { CalculateRequest, CalculateResponse, PaperCreated, PaperRequest, Preset, RaceCard, RunnerCard, SettingsForm, Tier } from "../api/types";
 import ErrorBox from "../components/ErrorBox";
 import RawDrawer from "../components/RawDrawer";
 import ResultsPanel from "../components/ResultsPanel";
@@ -43,6 +43,7 @@ export default function RacePage() {
   const [stakeText, setStakeText] = useState("");
   const [commissionText, setCommissionText] = useState("");
   const [runners, setRunners] = useState<Record<string, RunnerState>>({});
+  const [preset, setPreset] = useState<Preset>("custom");
 
   const loadCard = useCallback(async () => {
     setCardError(null);
@@ -101,8 +102,10 @@ export default function RacePage() {
 
   const declared = useMemo(() => (card ? card.runners.filter((r) => r.status === "DECLARED") : []), [card]);
 
-  const setRunner = (id: string, changes: Partial<RunnerState>) =>
+  const setRunner = (id: string, changes: Partial<RunnerState>) => {
+    if ("tier" in changes) setPreset("custom");
     setRunners((previous) => ({ ...previous, [id]: { ...previous[id], ...changes } }));
+  };
 
   const onPriceInput = (runner: RunnerCard, text: string) => {
     const trimmed = text.trim();
@@ -125,7 +128,8 @@ export default function RacePage() {
       tier: runner.exchange_price === null ? "OUT" : runners[runner.horse_id]?.tier ?? "OUT",
     });
 
-  const applyPreset = (profitCount: number, breakEvenCount: number) => {
+  const applyPreset = (profitCount: number, breakEvenCount: number, name: Preset) => {
+    setPreset(name);
     const priced = declared
       .map((r) => ({ id: r.horse_id, price: runners[r.horse_id]?.price ?? null }))
       .filter((r): r is { id: string; price: number } => r.price !== null)
@@ -199,6 +203,7 @@ export default function RacePage() {
         race_id: card.race.race_id,
         stake_total: request.stake_total,
         commission_rate: request.commission_rate,
+        preset,
         runners: declared.map((r) => {
           const state = runners[r.horse_id];
           const tier: Tier = state?.tier ?? "OUT";
@@ -272,8 +277,8 @@ export default function RacePage() {
             Commission (fraction)
             <input className="num" type="number" min="0" max="0.99" step="0.005" value={commissionText} onChange={(e) => setCommissionText(e.target.value)} />
           </label>
-          <button onClick={() => applyPreset(2, 0)}>Top two only</button>
-          <button onClick={() => applyPreset(2, 2)}>Four horses</button>
+          <button onClick={() => applyPreset(2, 0, "top_two")}>Top two only</button>
+          <button onClick={() => applyPreset(2, 2, "four_horses")}>Four horses</button>
           <button className="small" onClick={() => void loadCard()}>
             Refresh card
           </button>
@@ -419,6 +424,10 @@ export default function RacePage() {
         saving={saving}
         saved={saved}
         saveError={saveError}
+        trial={declared.some((r) => runners[r.horse_id]?.edited)}
+        offDt={card.race.off_dt}
+        preset={preset}
+        stakeTotal={stakeValid ? stake : null}
       />
     </div>
   );

@@ -24,7 +24,7 @@ from core.errors import ApiError
 from core.logging import log
 from core.storage import ObjectStore, get_json, put_json
 from services.dutch import calculate
-from services.races import STATUS_DECLARED, map_race_card, to_float, uk_time
+from services.races import STATUS_DECLARED, map_race_card, parse_off_dt, to_float, uk_time
 
 logger = logging.getLogger("fb12.paper")
 
@@ -33,11 +33,10 @@ STATUS_OPEN = "OPEN"
 STATUS_SETTLED = "SETTLED"
 STATUS_NEEDS_REVIEW = "NEEDS_REVIEW"
 STATUSES = (STATUS_OPEN, STATUS_SETTLED, STATUS_NEEDS_REVIEW)
+KIND_BET = "BET"
+KIND_TRIAL = "TRIAL"
+PRESETS = ("top_two", "four_horses", "custom")
 
-LIST_FIELDS = (
-    "entry_id", "race_id", "race_name", "course", "off_dt", "saved_at", "saved_by", "status",
-    "pnl", "pnl_after_commission", "pnl_at_sp", "pnl_at_bsp", "pnl_at_bsp_after_commission", "bsp_pending", "review_reason",
-)
 
 
 def entry_key(entry_id: str) -> str:
@@ -121,12 +120,21 @@ class PaperStore:
             "race_name": entry["race"].get("race_name"),
             "course": entry["race"].get("course"),
             "off_dt": entry["race"].get("off_dt"),
+            "pattern": entry["race"].get("pattern"),
             "saved_at": entry["saved_at"],
             "saved_by": entry["saved_by"],
             "status": entry["status"],
+            "kind": entry.get("kind", KIND_TRIAL),
+            "placed_at": entry.get("placed_at", entry["saved_at"]),
+            "minutes_before_off": entry.get("minutes_before_off"),
+            "preset": entry.get("preset"),
+            "stake_total": entry["inputs"]["stake_total"],
+            "expected_profit_gbp": entry.get("expected_profit_gbp"),
+            "winner": settlement.get("winner"),
             "pnl": settlement.get("pnl"),
             "pnl_after_commission": settlement.get("pnl_after_commission"),
             "pnl_at_sp": settlement.get("pnl_at_sp"),
+            "pnl_at_sp_after_commission": settlement.get("pnl_at_sp_after_commission"),
             "pnl_at_bsp": settlement.get("pnl_at_bsp"),
             "pnl_at_bsp_after_commission": settlement.get("pnl_at_bsp_after_commission"),
             "bsp_pending": settlement.get("bsp_pending"),
@@ -182,12 +190,32 @@ class PaperStore:
                 "horse": on_card["horse"],
                 "price": raw.get("price"),
                 "card_price": raw.get("card_price"),
+                "card_price_at_save": on_card["exchange_price"],
+                "card_price_updated_at_save": on_card["exchange_updated"],
                 "price_edited": bool(raw.get("price_edited", False)),
                 "tier": raw.get("tier"),
                 "part_fraction": raw.get("part_fraction"),
             })
+        preset = body.get("preset") or "custom"
+        if preset not in PRESETS:
+            problems.append(f"preset must be one of {', '.join(PRESETS)}, not {preset!r}.")
         if problems:
             raise ApiError(400, "INVALID_INPUT", "Invalid input. " + " ".join(problems))
+
+        now = datetime.now(UTC)
+        off = parse_off_dt(mapped["race"]["off_dt"])
+        minutes_before_off = round((off - now).total_seconds() / 60.0, 1) if off is not None else None
+        trial = any(r["price_edited"] for r in runner_inputs)
+        kind = KIND_TRIAL if trial else KIND_BET
+        if kind == KIND_BET:
+            if off is None:
+                raise ApiError(400, "INVALID_INPUT", f"The card for {race_id} carries no off time, so a bet cannot be timed. Typed prices save as a trial.")
+            if now >= off:
+                raise ApiError(
+                    400, "INVALID_INPUT",
+                    f"{mapped['race']['race_name']} went off at {uk_time(mapped['race']['off_dt'])} UK; bets after the off are refused. "
+                    "Typed prices save as a trial, which is kept out of the totals.",
+                )
 
         result = calculate(body.get("stake_total"), body.get("commission_rate"), [
             {"horse_id": r["horse_id"], "horse": r["horse"], "price": r["price"], "tier": r["tier"], "part_fraction": r["part_fraction"]}
@@ -196,18 +224,27 @@ class PaperStore:
         if not result.feasible:
             raise ApiError(400, "INVALID_INPUT", f"The entry is not feasible, so it was not saved: {result.message}")
 
-        now = datetime.now(UTC)
         entry = {
             "entry_id": new_entry_id(now),
             "status": STATUS_OPEN,
+            "kind": kind,
+            "trial": trial,
             "saved_at": now.isoformat(),
             "saved_by": saved_by,
+            "placed_at": now.isoformat(),
+            "placed_by": saved_by,
+            "minutes_before_off": minutes_before_off,
+            "preset": preset,
+            "expected_profit_gbp": result.to_contract()["expected_value_gbp"],
+            "expected_profit_pct": result.to_contract()["expected_value_pct"],
             "race": {
                 "race_id": race_id,
                 "race_name": mapped["race"]["race_name"],
                 "course": mapped["race"]["course"],
                 "off_dt": mapped["race"]["off_dt"],
                 "off_time_uk": uk_time(mapped["race"]["off_dt"]),
+                "pattern": mapped["race"]["pattern"],
+                "field_size": mapped["race"]["field_size"],
                 "card_fetched_at": fetched_at,
             },
             "inputs": {
@@ -222,21 +259,27 @@ class PaperStore:
             "raw_result": None,
         }
         await self._write(entry)
-        log(logger, logging.INFO, "paper entry saved", entry_id=entry["entry_id"], race_id=race_id, saved_by=saved_by,
-            stake_total=result.stake_total, runners=len(runner_inputs))
-        return {"entry_id": entry["entry_id"], "status": STATUS_OPEN, "saved_at": entry["saved_at"], "saved_by": saved_by}
+        log(logger, logging.INFO, "paper bet placed" if kind == KIND_BET else "paper trial saved", entry_id=entry["entry_id"],
+            race_id=race_id, saved_by=saved_by, stake_total=result.stake_total, runners=len(runner_inputs),
+            minutes_before_off=minutes_before_off, preset=preset)
+        return {"entry_id": entry["entry_id"], "status": STATUS_OPEN, "saved_at": entry["saved_at"], "saved_by": saved_by,
+                "kind": kind, "minutes_before_off": minutes_before_off}
 
     # --- read -----------------------------------------------------------------
 
-    async def list(self, status: str | None) -> list[dict[str, Any]]:
+    async def list(self, status: str | None, kind: str | None = None) -> list[dict[str, Any]]:
         if status:
             wanted = status.strip().upper()
             if wanted not in STATUSES:
                 raise ApiError(400, "INVALID_INPUT", f"status must be one of OPEN, SETTLED or NEEDS_REVIEW, not {status!r}.")
         else:
             wanted = None
+        wanted_kind = kind.strip().upper() if kind else None
+        if wanted_kind and wanted_kind not in (KIND_BET, KIND_TRIAL):
+            raise ApiError(400, "INVALID_INPUT", f"kind must be BET or TRIAL, not {kind!r}.")
         index = await self._load_index()
-        items = [item for item in index.values() if wanted is None or item.get("status") == wanted]
+        items = [item for item in index.values()
+                 if (wanted is None or item.get("status") == wanted) and (wanted_kind is None or item.get("kind") == wanted_kind)]
         items.sort(key=lambda item: item.get("saved_at") or "", reverse=True)
         return items
 
@@ -316,7 +359,7 @@ class PaperStore:
             return {
                 "status": STATUS_NEEDS_REVIEW, "winner": winners[0].get("horse") if len(winners) == 1 else None,
                 "winners": [w.get("horse") for w in winners], "pnl": None, "pnl_after_commission": None,
-                "pnl_at_sp": None, "pnl_at_bsp": None, "pnl_at_bsp_after_commission": None, "bsp_pending": None,
+                "pnl_at_sp": None, "pnl_at_sp_after_commission": None, "pnl_at_bsp": None, "pnl_at_bsp_after_commission": None, "bsp_pending": None,
                 "review_reason": reason, "settled_at": now_iso(),
             }
 
@@ -359,6 +402,7 @@ class PaperStore:
             "pnl": _round(pnl),
             "pnl_after_commission": _round(_after_commission(pnl, commission)),
             "pnl_at_sp": _round(pnl_at_sp),
+            "pnl_at_sp_after_commission": _round(_after_commission(pnl_at_sp, commission)),
             "pnl_at_bsp": _round(pnl_at_bsp),
             "pnl_at_bsp_after_commission": _round(_after_commission(pnl_at_bsp, commission)),
             "bsp_pending": bsp is None,
@@ -377,6 +421,7 @@ class PaperStore:
             "pnl": settlement.get("pnl"),
             "pnl_after_commission": settlement.get("pnl_after_commission"),
             "pnl_at_sp": settlement.get("pnl_at_sp"),
+            "pnl_at_sp_after_commission": settlement.get("pnl_at_sp_after_commission"),
             "pnl_at_bsp": settlement.get("pnl_at_bsp"),
             "pnl_at_bsp_after_commission": settlement.get("pnl_at_bsp_after_commission"),
             "bsp_pending": settlement.get("bsp_pending"),

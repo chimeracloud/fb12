@@ -200,11 +200,15 @@ export interface PaperRunnerIn {
   part_fraction: number | null;
 }
 
+export type Preset = "top_two" | "four_horses" | "custom";
+export type PaperKind = "BET" | "TRIAL";
+
 export interface PaperRequest {
   race_id: string;
   stake_total: number;
   commission_rate: number;
   runners: PaperRunnerIn[];
+  preset: Preset | null;
 }
 
 export interface PaperCreated {
@@ -212,6 +216,8 @@ export interface PaperCreated {
   status: "OPEN";
   saved_at: string;
   saved_by: string;
+  kind: PaperKind;
+  minutes_before_off: number | null;
 }
 
 export interface PaperListItem {
@@ -220,12 +226,21 @@ export interface PaperListItem {
   race_name: string | null;
   course: string | null;
   off_dt: string | null;
+  pattern: string | null;
   saved_at: string;
   saved_by: string;
   status: PaperStatus;
+  kind: PaperKind;
+  placed_at: string;
+  minutes_before_off: number | null;
+  preset: string | null;
+  stake_total: number;
+  expected_profit_gbp: number | null;
+  winner: string | null;
   pnl: number | null;
   pnl_after_commission: number | null;
   pnl_at_sp: number | null;
+  pnl_at_sp_after_commission: number | null;
   pnl_at_bsp: number | null;
   pnl_at_bsp_after_commission: number | null;
   bsp_pending: boolean | null;
@@ -239,6 +254,7 @@ export interface SettleResponse {
   pnl: number | null;
   pnl_after_commission: number | null;
   pnl_at_sp: number | null;
+  pnl_at_sp_after_commission: number | null;
   pnl_at_bsp: number | null;
   pnl_at_bsp_after_commission: number | null;
   bsp_pending: boolean | null;
@@ -248,10 +264,18 @@ export interface SettleResponse {
 export interface PaperEntry {
   entry_id: string;
   status: PaperStatus;
+  kind: PaperKind;
+  trial: boolean;
   saved_at: string;
   saved_by: string;
-  race: { race_id: string; race_name: string | null; course: string | null; off_dt: string | null; off_time_uk: string | null; card_fetched_at: string };
-  inputs: { stake_total: number; commission_rate: number; runners: (PaperRunnerIn & { horse: string })[] };
+  placed_at: string;
+  placed_by: string;
+  minutes_before_off: number | null;
+  preset: string | null;
+  expected_profit_gbp: number | null;
+  expected_profit_pct: number | null;
+  race: { race_id: string; race_name: string | null; course: string | null; off_dt: string | null; off_time_uk: string | null; pattern: string | null; field_size: number | null; card_fetched_at: string };
+  inputs: { stake_total: number; commission_rate: number; runners: (PaperRunnerIn & { horse: string; card_price_at_save: number | null; card_price_updated_at_save: string | null })[] };
   figures: CalculateResponse;
   settlement: (SettleResponse & { winner_tier?: string | null; winner_stake?: number | null; winner_sp_dec?: number | null; winner_bsp?: number | null; settled_at?: string; note?: string | null }) | null;
   result_summary: {

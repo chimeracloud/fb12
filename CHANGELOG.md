@@ -2,6 +2,13 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.7.0 / web 0.4.0] — 2026-10-09 — paper bets (step 1)
+
+### Added
+- A paper entry is a **bet** when every price is the live price shown at that moment, a **trial** when any price was typed; trials are kept out of the totals. Bets after the off are refused (`400`, naming the off time); trials save at any time. Entries record `placed_at`, `placed_by`, `minutes_before_off`, `preset`, the race's `pattern`, the expected profit at market odds when placed, and the exchange price FB12 itself saw at save time per runner. `GET /api/paper?kind=` filters bets or trials. `pnl_at_sp_after_commission` added to the settlement.
+- GUI: "Place paper bet" opens a bet slip with each backed runner's stake, return and net plus the summary, then "Confirm paper bet"; typed prices turn it into "Save trial" with a trial marker; the button is disabled after the off. Presets are recorded ("top_two", "four_horses", else "custom" once a tier is changed by hand). The entries page shows placed time, minutes before the off, who placed it, bet or trial, the preset, staked and expected profit, with a kind filter; the entry page shows the same record.
+- Tests: a live-price bet on the real card with its off moved to tomorrow (kind BET, timing in minutes, placed_by, preset), refusal after the real off time while the typed-price trial still saves, preset validation.
+
 ## [0.6.1] — 2026-10-09 — the Cloudflare path opened
 
 ### Recorded live
