@@ -1,10 +1,10 @@
 # FB12 — status
 
-**Unit:** FB12 Dutch (API half). **Written:** 2026-10-09 10:45 UK, by the build agent.
+**Unit:** FB12 Dutch (API half). **Written:** 2026-10-09 11:05 UK, by the build agent.
 
-**State:** API shell deployed and checked. Live at
-https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app (revision `fb12-dutch-api-00003-ztd`,
-version 0.1.1). Next step (race list and race card) starting.
+**State:** Shell deployed and checked (0.1.1). Race list and race card pushed
+(0.2.0); their live check waits on the service identity switch below, because
+the default compute account cannot read the Racing API secrets.
 
 **Waiting for (from Charles, since 2026-10-09 10:45 UK), not blocking the next step:**
 - The service identity switched from the default compute service account to

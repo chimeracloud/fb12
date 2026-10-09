@@ -21,7 +21,8 @@ and one CHANGELOG at the root cover both.
 | --- | --- | --- |
 | API shell (admin endpoints, both credential paths) | Deployed and checked, 9 October 2026 (revision `fb12-dutch-api-00003-ztd`, version 0.1.1) | `api/` |
 | **Cloud Run URL** | **https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app** (also answers at `https://fb12-dutch-api-991649774709.europe-west1.run.app`). Prompt 2 puts this in the Pages Function's config | europe-west1 |
-| Race list, race card, calculate, move, pace, paper entries | Not started | — |
+| Race list and race card (`GET /api/races`, `GET /api/races/{race_id}`) | Pushed (version 0.2.0); live check pending the service identity switch to fb12-sa, which the Racing API secrets need | `api/services/` |
+| Calculate, move, pace, paper entries | Not started | — |
 | GUI | Not started (prompt 2) | `web/` |
 
 Open items for Charles after the first deploy:
@@ -183,13 +184,15 @@ exist in practice: `UNAUTHENTICATED` (401, body `{"error": {"code":
 `INTERNAL_ERROR` (500, an unexpected exception). The message is written to be
 shown as is.
 
-### Operational endpoints (steps 2 to 5; not yet built)
+### Operational endpoints
 
 1. `GET /api/races?date=&regions=gb,ire&pattern_only=false` →
    `{"date", "races": [{"race_id", "off_dt", "off_time_uk", "course", "race_name", "pattern", "race_class", "field_size", "region"}]}`
 2. `GET /api/races/{race_id}` →
    `{"race": {"race_id", "off_dt", "off_time_uk", "course", "race_name", "pattern", "distance", "going", "field_size"}, "fetched_at", "runners": [{"horse_id", "horse", "number", "draw", "status" (DECLARED, NON_RUNNER or RESERVE), "owner", "owner_id", "trainer", "trainer_id", "jockey", "official_rating", "form", "exchange_price", "exchange_updated", "best_bookmaker_price", "best_bookmaker", "same_owner_as", "same_trainer_too"}]}`.
    `exchange_price` is null when the card has no Betfair Exchange price.
+   How it is built: from `GET /racecards/{race_id}/pro`. Number `NR` is `NON_RUNNER`, numbers starting `R` are `RESERVE`. `exchange_price` is the card's Betfair Exchange entry with its `updated` time; the API gives that time without an offset and FB12 reads it as UK time. `best_bookmaker_price` is the highest decimal among bookmakers, leaving out Betfair Exchange, Smarkets and Matchbook. `same_owner_as` lists the other declared runners with the same `owner_id`; `same_trainer_too` is true when one of them shares the `trainer_id`. `fetched_at` is when FB12 fetched the card from the API (a cached card keeps its fetch time).
+   Race list: from `GET /racecards/pro?date=&region_codes=`; `date` defaults to today in UK time, `regions` to the setting; `pattern_only` keeps races with a pattern. Sorted by off time.
 3. `GET /api/races/{race_id}/runners/{horse_id}/move` →
    `{"horse_id", "source" ("Betfair Exchange", "bookmaker median" or null), "first_price", "first_at", "latest_price", "latest_at", "change_pct", "direction" ("shortened", "drifted", "unchanged" or null), "note"}`
 4. `GET /api/races/{race_id}/runners/{horse_id}/pace?runs=5` →
@@ -213,6 +216,17 @@ shown as is.
 | `GET /admin/config` | Deployment reference: project, region, Cloud Run service and revision, Python version, Racing API base URL, bucket, Firestore path, access config (team domain, audience tag, operators, audience rule), credential secret names with masked values, pipeline. |
 | `GET /admin/logs?limit=100&before=&severity=` | `{"entries": [...newest first], "count", "limit", "newest_seq", "oldest_seq", "next_before", "buffer_size"}`. Each entry: `timestamp`, `severity`, `service_name`, `trace_id`, `logger`, `message`, `seq`, plus the structured fields of that line. In-memory ring buffer of the last 1000 entries of this instance. |
 | `GET /admin/stream` | Server-Sent Events. First event `hello` carries the status snapshot. Then `log` (each log entry, `id` = its seq), `settings` (keys changed, by whom) and a `status` heartbeat every 15 seconds of silence. Every event's data is `{"event", "time", "data"}`. Cloud Run closes long requests at its timeout; the client reconnects. |
+
+## The Racing API
+
+Base URL `https://api.theracingapi.com/v1`, HTTP Basic Auth. Field names were
+checked against the live OpenAPI document and live responses on 9 October 2026.
+FB12 throttles itself to `request_rate_per_second` (default 3; the account
+allows 5 and may be shared), backs off and retries on 429 (`Retry-After` or
+exponential, `retry_on_429_max` times), and caches per endpoint kind with the
+`cache_*_seconds` settings. A failure comes back as `UPSTREAM_ERROR` (or
+`NOT_FOUND` for a 404) with the Racing API's status in `upstream_status` and its
+detail in the message. Counters are in `GET /admin/status` under `racing_api`.
 
 ## Policies honoured
 

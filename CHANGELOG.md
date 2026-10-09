@@ -2,6 +2,17 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.2.0] — 2026-10-09 — race list and race card
+
+### Added
+- `GET /api/races` and `GET /api/races/{race_id}` per the contract (`services/races.py`, `routers/api.py`, response models in `models/schemas.py`).
+- The Racing API client (`services/racing_api.py`): Basic Auth from the credential module, throttle from `request_rate_per_second`, 429 back-off and retry (`retry_on_429_max`), TTL cache per endpoint kind from the `cache_*_seconds` settings, counters in `/admin/status` under `racing_api`, and the Racing API's own status and detail in every error.
+- Tests: mapping against the real Challenge Stakes card of 9 October 2026 (`tests/fixtures/challenge_stakes_card.json`, values exactly as received at 09:53 UK, reduced to the fields read); client behaviour (auth header, caching, repeated `region_codes`, 429 retry, error mapping, network failure, missing credentials) over an httpx MockTransport; both endpoints and their input validation through the app.
+
+### Noted
+- The card's odds `updated` time arrives without an offset; FB12 reads it as UK time and returns ISO 8601 with offset.
+- The live check of these endpoints needs the service identity switched to `fb12-sa`: the default compute account cannot read the Racing API secrets.
+
 ## [0.1.1] — 2026-10-09 — first build fixed
 
 ### Fixed
