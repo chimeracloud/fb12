@@ -14,7 +14,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "fb12.json"
 

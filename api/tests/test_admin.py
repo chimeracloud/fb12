@@ -149,9 +149,18 @@ def test_stream_starts_with_hello_then_forwards_events(app):
     assert first.endswith("\n\n") and second.endswith("\n\n")
 
 
-def test_stream_route_is_sse(app):
-    routes = {(r.path, tuple(sorted(r.methods))) for r in app.routes if hasattr(r, "methods")}
-    assert ("/admin/stream", ("GET",)) in routes
+def test_stream_endpoint_answers_with_server_sent_events(app):
+    """The endpoint itself, not the framework's route table: a streaming SSE response."""
+    from starlette.requests import Request
+
+    from routers.admin import admin_stream
+
+    request = Request({"type": "http", "app": app, "method": "GET", "path": "/admin/stream",
+                       "headers": [], "query_string": b""})
+    response = asyncio.run(admin_stream(request))
+    assert response.media_type == "text/event-stream"
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["content-type"].startswith("text/event-stream")
 
 
 def test_unknown_route_with_token_is_not_found(client, operator_headers):

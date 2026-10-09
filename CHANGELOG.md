@@ -2,6 +2,11 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.1.1] — 2026-10-09 — first build fixed
+
+### Fixed
+- The first Cloud Build run failed in the test stage: `test_stream_route_is_sse` asserted on Starlette's internal `route.methods`, which Starlette 1.7 (pulled by the build) no longer exposes. Replaced with a test of the endpoint's own behaviour: `/admin/stream` answers a streaming `text/event-stream` response. 48 of 49 tests had passed; the build context (`api`) and every `COPY` were right.
+
 ## [0.1.0] — 2026-10-09 — API shell
 
 ### Added
