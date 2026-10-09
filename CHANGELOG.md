@@ -17,6 +17,9 @@ All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 - Service settings (gcloud, 9 October 2026): `--max-instances 1 --timeout 900 --service-account fb12-sa@chiops.iam.gserviceaccount.com`. One instance always, because the throttle, cache and recorder lock live in memory. Recorded in the README.
 - README records the contract decisions of 9 October 2026 for the next steps: move's source order (bookmaker median first, exchange as fallback, SP and dash entries skipped, exchange prices outside the minute's bookmaker range dropped) and the settlement fields `pnl_at_sp`, `pnl_at_bsp`, `pnl_at_bsp_after_commission`, `bsp_pending` on endpoints 7, 8 and 9.
 
+### Fixed
+- A missing or unreadable recordings bucket is reported as `502 UPSTREAM_ERROR` naming the bucket, not as a 500 (found on the first live probe before the bucket existed).
+
 ### Infrastructure
 - `gcloud iam service-accounts create fb12-recorder-scheduler --display-name "FB12 recorder: Cloud Scheduler caller"` (no roles; Cloud Scheduler mints its OIDC token).
 

@@ -153,29 +153,31 @@ class Recorder:
             return
         try:
             index = await get_json(self.store, INDEX_KEY)
-        except Exception as exc:  # noqa: BLE001
+            if index is None:
+                # First run, or the index is gone: rebuild from the manifests that exist.
+                keys = await self.store.list_keys("manifest/")
+                days: dict[str, dict[str, Any]] = {}
+                for key in keys:
+                    name = key.rsplit("/", 1)[-1]
+                    if not name.endswith(".json") or name.startswith("_"):
+                        continue
+                    manifest = await get_json(self.store, key)
+                    if manifest:
+                        days[manifest["date"]] = self._index_entry(manifest)
+                self.index = days
+                if keys:
+                    await self._save_index()
+            else:
+                self.index = index.get("days", {})
+            self.state = (await get_json(self.store, STATE_KEY)) or {}
+        except ApiError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - a missing or unreadable bucket is reported, not hidden
             raise ApiError(
                 502, "UPSTREAM_ERROR",
-                f"The recorder cannot read its bucket gs://{self.store.bucket} ({type(exc).__name__}: {exc}). "
-                "Nothing was recorded.",
+                f"The recorder cannot use its bucket gs://{self.store.bucket} ({type(exc).__name__}: {exc}). "
+                "Nothing was recorded. The bucket must exist and fb12-sa must hold objectAdmin on it.",
             ) from exc
-        if index is None:
-            # First run, or the index is gone: rebuild from the manifests that exist.
-            keys = await self.store.list_keys("manifest/")
-            days: dict[str, dict[str, Any]] = {}
-            for key in keys:
-                name = key.rsplit("/", 1)[-1]
-                if not name.endswith(".json") or name.startswith("_"):
-                    continue
-                manifest = await get_json(self.store, key)
-                if manifest:
-                    days[manifest["date"]] = self._index_entry(manifest)
-            self.index = days
-            if keys:
-                await self._save_index()
-        else:
-            self.index = index.get("days", {})
-        self.state = (await get_json(self.store, STATE_KEY)) or {}
         self._loaded = True
 
     @staticmethod
@@ -416,7 +418,8 @@ class Recorder:
         try:
             fetched = await self.racing.fetch("/racecards/pro", params, describe=f"racecards for {day.isoformat()}", background=True)
         except ApiError as exc:
-            return self._component_failed("cards", day, section, exc, errors, boundary_key="cards_available_from")
+            await self._component_failed("cards", day, section, exc, errors, boundary_key="cards_available_from")
+            return None
         await put_raw_gzip(self.store, cards_key(day), fetched.raw)
         races = fetched.data.get("racecards") or [] if isinstance(fetched.data, dict) else []
         section.update({
@@ -427,14 +430,14 @@ class Recorder:
         })
         return fetched.data
 
-    def _component_failed(self, name: str, day: date, section: dict[str, Any], exc: ApiError,
-                          errors: list[str], boundary_key: str) -> None:
+    async def _component_failed(self, name: str, day: date, section: dict[str, Any], exc: ApiError,
+                                errors: list[str], boundary_key: str) -> None:
         if exc.upstream_status in UNAVAILABLE_STATUSES:
             section.update({"status": "unavailable", "http_status": exc.upstream_status, "detail": exc.message,
                             "fetched_at": now_iso()})
             self.state[boundary_key] = (day + timedelta(days=1)).isoformat()
             self.state[boundary_key + "_detail"] = exc.message
-            asyncio.get_running_loop().create_task(self._save_state())
+            await self._save_state()
             log(logger, logging.WARNING, f"recorder {name} unavailable", date=day.isoformat(), status=exc.upstream_status, detail=exc.message)
         else:
             section.update({"status": "error", "http_status": exc.upstream_status, "detail": exc.message, "fetched_at": now_iso()})
@@ -474,7 +477,7 @@ class Recorder:
             try:
                 fetched = await self.racing.fetch("/results", params, describe=f"results for {day.isoformat()} (page {page_no})", background=True)
             except ApiError as exc:
-                self._component_failed("results", day, section, exc, errors, boundary_key="results_available_from")
+                await self._component_failed("results", day, section, exc, errors, boundary_key="results_available_from")
                 return
             await put_raw_gzip(self.store, results_key(day, page_no), fetched.raw)
             keys.append(results_key(day, page_no))
