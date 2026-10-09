@@ -3,6 +3,7 @@
   "service_name": "fb12-dutch-api",
   "gcp_project": "chiops",
   "region": "europe-west1",
+  "service_account": "fb12-sa@chiops.iam.gserviceaccount.com",
   "firestore": {
     "database": "(default)",
     "collection": "fsu-admin-settings",

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "fb12.json"
 
@@ -75,6 +75,7 @@ class Fb12Config(Strict):
     service_name: str
     gcp_project: str
     region: str
+    service_account: str
     firestore: FirestoreConfig
     paper_entries_bucket: str
     racing_api: RacingApiConfig

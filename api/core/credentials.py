@@ -13,6 +13,7 @@ import logging
 import threading
 
 from core.config import CONFIG
+from core.identity import runtime_service_account
 from core.logging import log
 
 logger = logging.getLogger("fb12.credentials")
@@ -71,7 +72,15 @@ def _fetch(secret_id: str) -> tuple[str, str]:
     try:
         response = client.access_secret_version(request={"name": path})
     except Exception as exc:  # noqa: BLE001
-        raise CredentialError(f"could not read secret {secret_id!r}: {type(exc).__name__}") from exc
+        identity = runtime_service_account() or "an unknown identity"
+        reason = type(exc).__name__
+        if reason in ("PermissionDenied", "Forbidden", "Unauthenticated"):
+            raise CredentialError(
+                f"the service runs as {identity}, which may not read secret {secret_id!r} ({reason}). "
+                f"This is an identity problem, not a credential problem: the Cloud Run service must run as "
+                f"{CONFIG.service_account}. The secret values are not needed anywhere."
+            ) from exc
+        raise CredentialError(f"could not read secret {secret_id!r} as {identity}: {reason}") from exc
     value = response.payload.data.decode("utf-8").strip()
     version = response.name.rsplit("/", 1)[-1]
     return value, version

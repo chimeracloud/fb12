@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from core.config import CONFIG, VERSION, Runtime
 from core.credentials import credential_names, credential_state
 from core.events import now_iso, sse
+from core.identity import runtime_service_account
 from core.logging import RING
 from core.settings import MASK
 from models.schemas import SettingsUpdate
@@ -40,6 +41,15 @@ def health_snapshot(state: Any) -> dict[str, Any]:
         "time": now_iso(),
         "uptime_seconds": state.metrics.uptime_seconds,
         "settings_source": state.store.source,
+    }
+
+
+def identity_snapshot() -> dict[str, Any]:
+    actual = runtime_service_account()
+    return {
+        "runs_as": actual,
+        "expected": CONFIG.service_account,
+        "matches": (actual == CONFIG.service_account) if actual else None,
     }
 
 
@@ -77,6 +87,7 @@ def status_snapshot(state: Any) -> dict[str, Any]:
             "last_error": store.last_error,
         },
         "credentials": {name: credential_state(name) for name in credential_names()},
+        "identity": identity_snapshot(),
         "racing_api": racing.snapshot() if racing is not None else None,
         "stream": {
             "subscribers": bus.subscriber_count,
@@ -122,6 +133,7 @@ async def admin_config(request: Request) -> dict[str, Any]:
             "service": Runtime.service or None,
             "revision": Runtime.revision or None,
             "configuration": Runtime.configuration or None,
+            "identity": identity_snapshot(),
         },
         "python": platform.python_version(),
         "racing_api": {"base_url": CONFIG.racing_api.base_url},
