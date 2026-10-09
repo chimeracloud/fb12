@@ -24,10 +24,11 @@ and one CHANGELOG at the root cover both.
 | Race list and race card (`GET /api/races`, `GET /api/races/{race_id}`) | Deployed (0.2.0). Live check blocked until the service identity is fb12-sa: the default compute account cannot read the Racing API secrets | `api/services/races.py` |
 | Calculate (`POST /api/calculate`) | Deployed and checked live against the brief's figures (0.3.0) | `api/services/dutch.py` |
 | Recorder (`POST /api/record`) | Deployed and recording: 8 October 2026 and 17 March 2025 recorded live; Cloud Scheduler jobs created, backfill starts 00:00 UK | `api/services/recorder.py` |
-| Move and pace (`.../move`, `.../pace`) | Pushed (0.5.0) | `api/services/move.py`, `api/services/pace.py` |
+| Move and pace (`.../move`, `.../pace`) | Deployed and checked live (0.5.0): Holguin's move from the median of 26 bookmakers, his last five runs classified | `api/services/move.py`, `api/services/pace.py` |
 | Paper entries with SP and BSP settlement | Next | — |
 | GUI shell, race list, race page with grid and results panel, admin page | Pushed (web 0.1.0); deploys to pages.dev once Charles creates the Pages project; shows data once the subdomain and Access exist and the audience tag is set | `web/` |
-| GUI move and pace columns, paper entries page | Follow their endpoints; no placeholders in the meantime | `web/` |
+| GUI move and pace columns | Pushed (web 0.2.0) | `web/src/components/RunnerEvidence.tsx` |
+| GUI paper entries page and "Save as paper entry" | Follow their endpoints; no placeholders in the meantime | `web/` |
 
 Open items for Charles:
 - Rotate the Racing API password (it was pasted into a chat on 9 October 2026) and add it as a new version of `racingapi-password`. See docs/INCIDENTS.md.
@@ -168,9 +169,10 @@ editable exchange price beside the card price and its updated time, best
 bookmaker, owner, trainer, official rating, same-owner marker, tier with a PART
 fraction, and an "all fields" drawer per runner and for the race; the results
 panel, recalculated 300 ms after every change with the last figures dimmed while
-a call is in flight), Admin (health, status, the settings form built from the
-field definitions, config, logs, live stream). Move and pace columns and the
-paper entries page arrive with their endpoints.
+a call is in flight; Move and Pace columns that load per runner and show their
+own error with a retry), Admin (health, status, the settings form built from the
+field definitions, config, logs, live stream). The paper entries page arrives
+with its endpoints.
 
 ## Repository layout
 

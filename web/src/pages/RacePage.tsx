@@ -5,6 +5,7 @@ import type { CalculateRequest, CalculateResponse, RaceCard, RunnerCard, Setting
 import ErrorBox from "../components/ErrorBox";
 import RawDrawer from "../components/RawDrawer";
 import ResultsPanel from "../components/ResultsPanel";
+import { MoveCell, PaceCell } from "../components/RunnerEvidence";
 import { odds, ukDateTime } from "../lib/format";
 import { useDebounced } from "../lib/useDebounce";
 
@@ -253,10 +254,12 @@ export default function RacePage() {
               <th>Horse</th>
               <th>Exchange price</th>
               <th>Best bookmaker</th>
+              <th>Move</th>
               <th>Owner</th>
               <th>Trainer</th>
               <th className="num">OR</th>
               <th>Same owner</th>
+              <th>Pace</th>
               <th>Tier</th>
             </tr>
           </thead>
@@ -310,6 +313,7 @@ export default function RacePage() {
                     <span className="num">{odds(runner.best_bookmaker_price)}</span>{" "}
                     <span className="small muted">{runner.best_bookmaker ?? ""}</span>
                   </td>
+                  <td>{locked ? <span className="muted">—</span> : <MoveCell raceId={raceId} horseId={runner.horse_id} />}</td>
                   <td>{runner.owner ?? "—"}</td>
                   <td>{runner.trainer ?? "—"}</td>
                   <td className="num">{runner.official_rating ?? "—"}</td>
@@ -323,6 +327,7 @@ export default function RacePage() {
                       <span className="muted">—</span>
                     )}
                   </td>
+                  <td>{locked ? <span className="muted">—</span> : <PaceCell raceId={raceId} horseId={runner.horse_id} />}</td>
                   <td>
                     {locked ? (
                       <span className="muted">—</span>

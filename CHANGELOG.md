@@ -2,6 +2,11 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [web 0.2.0] — 2026-10-09 — move and pace columns
+
+### Added
+- Race page: Move (first to latest price, percent change, shortened or drifted, source and times, the API's note when there is no history) and Pace (led count of N with the other counts; a click opens the past runs with position, class, the pace class and the raw comment). Each row loads its own two calls as they return and shows its own error with a retry; neither blocks the tiers or the results.
+
 ## [0.5.0] — 2026-10-09 — move and pace
 
 ### Added

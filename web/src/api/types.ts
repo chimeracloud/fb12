@@ -158,3 +158,33 @@ export interface LogsResponse {
 export type Health = Record<string, unknown> & { status: string; version: string; revision: string | null; time: string };
 export type Status = Record<string, unknown>;
 export type Config = Record<string, unknown>;
+
+export interface MoveResponse {
+  horse_id: string;
+  source: "bookmaker median" | "Betfair Exchange" | null;
+  first_price: number | null;
+  first_at: string | null;
+  latest_price: number | null;
+  latest_at: string | null;
+  change_pct: number | null;
+  direction: "shortened" | "drifted" | "unchanged" | null;
+  note: string | null;
+}
+
+export type PaceCategory = "LED" | "PROMINENT" | "MIDFIELD" | "HELD_UP" | "UNCLASSIFIED";
+
+export interface PaceRun {
+  date: string | null;
+  course: string | null;
+  race_name: string | null;
+  position: string | null;
+  class: string | null;
+  comment: string | null;
+  category: PaceCategory;
+}
+
+export interface PaceResponse {
+  horse_id: string;
+  counts: Record<PaceCategory, number>;
+  runs: PaceRun[];
+}
