@@ -198,6 +198,15 @@ def test_results_plan_limit_is_recorded_as_unavailable_and_learned(recorder_app,
     assert state["results_available_from"] == (day + timedelta(days=1)).isoformat()
 
 
+def test_empty_results_on_a_racing_day_is_not_complete_and_learns_the_boundary(recorder_app, client, operator_headers, upstream):
+    day = yesterday_uk()
+    upstream.results_page = {"results": [], "total": 0, "limit": 100, "skip": 0, "query": []}
+    body = client.post(f"/api/record?date={day.isoformat()}", headers=operator_headers).json()
+    assert body["results"] == "empty" and body["complete"] is False
+    state = json.loads(recorder_app.state.recorder.store.objects[STATE_KEY][0])
+    assert state["results_available_from"] == (day + timedelta(days=1)).isoformat()
+
+
 def test_backfill_outside_window_records_nothing(recorder_app, client, operator_headers, upstream, monkeypatch):
     monkeypatch.setattr(recorder_app.state.recorder, "in_backfill_window", lambda now=None: False)
     body = client.post("/api/record?date=backfill", headers=operator_headers).json()

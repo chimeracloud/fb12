@@ -2,6 +2,26 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.4.1] — 2026-10-09 — recording live; results back to 2005; rotation without a restart
+
+### Added
+- A Racing API 401 makes the client re-read both secrets from Secret Manager once and retry, so a rotated password is picked up without a restart. A second 401 is reported, body as is.
+- Recorder: a results page with no races on a day whose card has races is `empty`, the day stays incomplete and the boundary is learned, so the plan's reach is never mistaken for a quiet day.
+
+### Changed
+- Racing API error messages carry the upstream body as is (trimmed for length only). A 401 message says it can mean wrong credentials, a plan that does not cover the endpoint, or an overdue invoice.
+- Recorder defaults: `results_history_days` 8000 and `backfill_earliest_date` 2005-01-01, because the historical results add-on is active on this account (a live call for 2025-03-17 returned 35 races with BSP on every runner); `recorder_max_attempts` 8 so a late BSP never exhausts a day. Set live the same way.
+- README: the removed-fields list corrected (rpr, ts, tsr, spotlight, quotes, stable_tour, betting_forecast; medical and breeder can carry data); the network-edge caps (50 per 10 s, 100 per 10 s lockout); overlap and retry behaviour; rotation.
+
+### Recorded live (9 October 2026)
+- 2026-10-08: 471 calls, 160 s, 46 races, 469 runners' odds, 432 result runners of which 428 with BSP; incomplete until BSP lands, retried by the next run.
+- 2025-03-17: 360 calls, 123 s, 35 races, 358 runners' odds, 324 result runners all with BSP; complete.
+
+### Infrastructure (gcloud, 9 October 2026)
+- `gcloud storage buckets create gs://chiops-fb12-racingapi-raw --location=europe-west2 --uniform-bucket-level-access`; `add-iam-policy-binding` fb12-sa `roles/storage.objectAdmin`.
+- Trigger `rmgpgab-fb12-dutch-api-europe-west1-chimeracloud-fb12--maqsf`: `includedFiles: [api/**]` via `gcloud alpha builds triggers export` / `import` (the GA `update github` command rejected the change).
+- `gcloud scheduler jobs create http fb12-record-daily` (`0 7 * * *`, `?date=yesterday`) and `fb12-record-backfill` (`*/3 0-5 * * *`, `?date=backfill`), europe-west1, Europe/London, POST, OIDC as `fb12-recorder-scheduler@chiops.iam.gserviceaccount.com`, audience the service URL, deadline 900 s, retries 0.
+
 ## [0.4.0] — 2026-10-09 — the recorder, raw passthrough, one instance
 
 ### Added

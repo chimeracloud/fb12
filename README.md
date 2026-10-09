@@ -23,14 +23,12 @@ and one CHANGELOG at the root cover both.
 | **Cloud Run URL** | **https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app** (also answers at `https://fb12-dutch-api-991649774709.europe-west1.run.app`). Prompt 2 puts this in the Pages Function's config | europe-west1 |
 | Race list and race card (`GET /api/races`, `GET /api/races/{race_id}`) | Deployed (0.2.0). Live check blocked until the service identity is fb12-sa: the default compute account cannot read the Racing API secrets | `api/services/races.py` |
 | Calculate (`POST /api/calculate`) | Deployed and checked live against the brief's figures (0.3.0) | `api/services/dutch.py` |
-| Recorder (`POST /api/record`) | Pushed (0.4.0); waits for the recordings bucket and Charles's two Cloud Scheduler jobs | `api/services/recorder.py` |
+| Recorder (`POST /api/record`) | Deployed and recording: 8 October 2026 and 17 March 2025 recorded live; Cloud Scheduler jobs created, backfill starts 00:00 UK | `api/services/recorder.py` |
 | Move, pace, paper entries with SP and BSP settlement | Next | — |
 | GUI | Not started (prompt 2) | `web/` |
 
 Open items for Charles:
 - Rotate the Racing API password (it was pasted into a chat on 9 October 2026) and add it as a new version of `racingapi-password`. See docs/INCIDENTS.md.
-- The Cloud Build trigger has no included-files filter yet; `api/**` stops GUI pushes rebuilding the API.
-- Approve the recordings bucket name `chiops-fb12-racingapi-raw`, then create the two Cloud Scheduler jobs (see The recorder).
 
 Current state in detail: [docs/status/latest.md](docs/status/latest.md).
 Incidents: [docs/INCIDENTS.md](docs/INCIDENTS.md).
@@ -206,7 +204,7 @@ recording run is already in progress). The message is written to be shown as is.
    `{"date", "races": [{"race_id", "off_dt", "off_time_uk", "course", "race_name", "pattern", "race_class", "field_size", "region"}]}`
 2. `GET /api/races/{race_id}` →
    `{"race": {"race_id", "off_dt", "off_time_uk", "course", "race_name", "pattern", "distance", "going", "field_size"}, "fetched_at", "runners": [{"horse_id", "horse", "number", "draw", "status" (DECLARED, NON_RUNNER or RESERVE), "owner", "owner_id", "trainer", "trainer_id", "jockey", "official_rating", "form", "exchange_price", "exchange_updated", "best_bookmaker_price", "best_bookmaker", "same_owner_as", "same_trainer_too"}]}`.
-   Plus, since 0.4.0: `"raw_race"` (the race object exactly as the Racing API card gives it, without `runners`) and on each runner `"raw"` (the runner object exactly as received, `odds` included). The GUI shows these in an "all fields" drawer per runner; a dash or empty string means missing, never zero. These card fields are always empty on this account and FB12 passes them through untouched and builds nothing on them: `spotlight`, `quotes`, `stable_tour`, `medical`, `rpr`, `ts`, `breeder`, `betting_forecast`.
+   Plus, since 0.4.0: `"raw_race"` (the race object exactly as the Racing API card gives it, without `runners`) and on each runner `"raw"` (the runner object exactly as received, `odds` included). The GUI shows these in an "all fields" drawer per runner; a dash or empty string means missing, never zero. The provider removed `rpr`, `ts`, `tsr`, `spotlight`, `quotes`, `stable_tour` and `betting_forecast` in June 2026: they are always present and always empty, and FB12 passes them through untouched and builds nothing on them. `medical` and `breeder` were not removed and can carry data.
    `exchange_price` is null when the card has no Betfair Exchange price.
    How it is built: from `GET /racecards/{race_id}/pro`. Number `NR` is `NON_RUNNER`, numbers starting `R` are `RESERVE`. `exchange_price` is the card's Betfair Exchange entry with its `updated` time; the API gives that time without an offset and FB12 reads it as UK time. `best_bookmaker_price` is the highest decimal among bookmakers, leaving out Betfair Exchange, Smarkets and Matchbook. `same_owner_as` lists the other declared runners with the same `owner_id`; `same_trainer_too` is true when one of them shares the `trainer_id`. `fetched_at` is when FB12 fetched the card from the API (a cached card keeps its fetch time).
    Race list: from `GET /racecards/pro?date=&region_codes=`; `date` defaults to today in UK time, `regions` to the setting; `pattern_only` keeps races with a pattern. Sorted by off time.
@@ -244,11 +242,20 @@ recording run is already in progress). The message is written to be shown as is.
 Base URL `https://api.theracingapi.com/v1`, HTTP Basic Auth. Field names were
 checked against the live OpenAPI document and live responses on 9 October 2026.
 FB12 throttles itself to `request_rate_per_second` (default 3; the account
-allows 5 and may be shared), backs off and retries on 429 (`Retry-After` or
-exponential, `retry_on_429_max` times), and caches per endpoint kind with the
-`cache_*_seconds` settings. A failure comes back as `UPSTREAM_ERROR` (or
-`NOT_FOUND` for a 404) with the Racing API's status in `upstream_status` and its
-detail in the message. Counters are in `GET /admin/status` under `racing_api`.
+allows 5 and may be shared), backs off and retries on 429 (waiting for
+`Retry-After`, else exponential, `retry_on_429_max` times), and caches per
+endpoint kind with the `cache_*_seconds` settings. Keep the 3 a second: the
+account is capped at 50 calls per 10 seconds at the network edge, and more than
+100 calls in 10 seconds from one IP triggers a 5 minute lockout. The racecards
+list endpoint itself allows 2 a second; the race list is cached 5 minutes.
+
+A failure comes back as `UPSTREAM_ERROR` (or `NOT_FOUND` for a 404) with the
+Racing API's status in `upstream_status` and its body, as is, in the message. A
+401 can mean wrong credentials, a plan that does not cover the endpoint, or an
+overdue invoice; the message says so. On a 401 FB12 re-reads the two secrets
+from Secret Manager once and retries, so a rotated password is picked up
+without a restart; a new revision is still rolled on rotation as belt and
+braces. Counters are in `GET /admin/status` under `racing_api`.
 
 ## The recorder
 
@@ -264,11 +271,11 @@ what the recorder therefore asks for and nothing more:
 | Data | Available | Setting |
 | --- | --- | --- |
 | Pro racecards (`/racecards/pro?date=`) | from 2023-01-23 | `cards_history_from` |
-| Results (`/results?start_date=&end_date=`) | the last 12 months (the £499 historical add-on would open 2005 onwards) | `results_history_days` |
+| Results (`/results?start_date=&end_date=`) | back to 2005-01-01: the historical add-on is active on this account, confirmed 9 October 2026 with a call for 2025-03-17 (35 races, every runner with a BSP) | `results_history_days` (8000) |
 | Odds history (`/odds/{race_id}/{horse_id}`) | from 2025-03-17 | `odds_history_from` |
 
-Layout in `gs://chiops-fb12-racingapi-raw` (name proposed, awaiting Charles; same
-settings and bindings as the paper entries bucket):
+Layout in `gs://chiops-fb12-racingapi-raw` (created 9 October 2026, europe-west2,
+uniform access, fb12-sa objectAdmin, the paper entries bucket's settings):
 
 ```
 cards/{date}.json.gz                      the day's racecards response
@@ -281,25 +288,43 @@ manifest/_state.json                      availability boundaries learned from t
 
 A day counts as complete only when every result carries BSP (plus the cards and
 every runner's odds history where the plan offers them). Incomplete days are
-retried on the next run; a daily run retries the last `recorder_retry_days`
-days, the backfill gives a day `recorder_max_attempts` tries. Odds that the API
-answers 404 for are recorded as missing, not failed.
+retried on the next run: the daily run retries the last `recorder_retry_days`
+days, and the backfill picks the newest incomplete day first, so a day the
+morning run leaves without BSP is picked up that night. Every run on a day
+counts towards `recorder_max_attempts` (8); after that the day is left as it is
+and its manifest says why. Odds that the API answers 404 for are recorded as
+missing, not failed. A results page with no races on a day whose card has races
+means the plan does not reach that day: the day stays incomplete and older days
+are not asked for results. Days before 2023-01-23 are results only (no card, no
+odds); the backfill runs back to `backfill_earliest_date` (2005-01-01).
+
+Overlap: one run at a time, enforced by an in-process lock on the single
+instance. A call that arrives while a run is in progress returns `409
+RECORDER_BUSY` at once and the next scheduled call picks up. A big day (around
+800 runners) takes longer than the 3 minute gap; that is expected. The one gap:
+during a deploy Cloud Run can briefly run two instances, so a run on the old
+one and a call to the new one could record the same day; the writes are
+idempotent raw objects, so nothing is lost or corrupted, and the manifest's
+`runs` list shows both.
 
 Modes: `date=YYYY-MM-DD` records that day at any time. `date=yesterday` records
 yesterday (UK) and retries recent incomplete days. `date=backfill` records the
 newest day not yet complete, newest first, only inside the night window
 (`backfill_window_start_hour` to `backfill_window_end_hour`, 00:00 to 06:00 UK),
-and answers `skipped` outside it. One day per call, roughly 450 calls for a day
-with odds; the backfill is about 260,000 calls over about five nights.
+and answers `skipped` outside it. One day per call: about 450 calls and 160
+seconds for a day with odds (8 October 2026 took 471 calls in 160 s), two or
+three calls for a results-only day before 2023. The backfill is about 275,000
+calls over about five nights.
 
 GUI calls go first: recorder calls are background calls that wait while any
 foreground request is in flight and share the same `request_rate_per_second`
 budget. One run at a time (`409 RECORDER_BUSY`). Progress is in
 `GET /admin/status` under `recorder` and on the stream as `recorder` events.
 
-Cloud Scheduler (Charles creates both, region europe-west1, HTTP target, method
-POST, OIDC token, service account `fb12-recorder-scheduler@chiops.iam.gserviceaccount.com`,
-audience `https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app`, attempt deadline 15 minutes,
+Cloud Scheduler (created with gcloud on 9 October 2026; region europe-west1, HTTP
+target, method POST, OIDC token, service account
+`fb12-recorder-scheduler@chiops.iam.gserviceaccount.com`, audience
+`https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app`, attempt deadline 900 s,
 retries 0, time zone Europe/London):
 
 | Job | Schedule | URL |
@@ -310,6 +335,11 @@ retries 0, time zone Europe/London):
 The scheduler account is on the operator list in the committed config; it holds
 no roles. A backfill call that finds a run still in progress gets 409 and the
 next one three minutes later picks up.
+
+Rotation: when the Racing API password changes, the old one stops working at
+once. Add the new value as a new version of `racingapi-password`; FB12 re-reads
+the secrets on the first 401 and carries on, and a new revision is rolled as
+well. Rotate outside 00:00 to 07:00 UK so the backfill is not running.
 
 ## Policies honoured
 

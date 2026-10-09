@@ -105,7 +105,7 @@ def test_429_beyond_the_retry_limit_is_an_upstream_error(fast_store):
     (403, "UPSTREAM_ERROR", 502),
     (500, "UPSTREAM_ERROR", 502),
 ])
-def test_upstream_errors_are_returned_with_their_status(fast_store, status, code, http):
+def test_upstream_errors_are_returned_with_their_status_and_body(fast_store, status, code, http):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(status, json={"detail": f"upstream said {status}"})
 
@@ -114,7 +114,40 @@ def test_upstream_errors_are_returned_with_their_status(fast_store, status, code
         asyncio.run(client.get("/racecards/rac_1/pro", None, cache_kind=None, describe="race card rac_1"))
     err = excinfo.value
     assert err.status_code == http and err.code == code and err.upstream_status == status
-    assert f"upstream said {status}" in err.message or status == 404
+    assert f'{{"detail":"upstream said {status}"}}' in err.message
+    if status == 401:
+        assert "overdue invoice" in err.message
+
+
+def test_401_reloads_credentials_once_and_retries(fast_store, monkeypatch):
+    """A rotated password: the first 401 makes the client re-read Secret Manager and retry."""
+    versions = iter([("old-user", "old-pass"), ("fb12-user", "new-pass")])
+    current = {"creds": next(versions)}
+
+    def fake_get_credential(name):
+        return {"racing_api_username": current["creds"][0], "racing_api_password": current["creds"][1]}[name]
+
+    def fake_reload():
+        current["creds"] = next(versions)
+
+    monkeypatch.setattr(racing_api, "get_credential", fake_get_credential)
+    monkeypatch.setattr(racing_api, "reload_credentials", fake_reload)
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers["authorization"])
+        if request.headers["authorization"] == httpx.BasicAuth("old-user", "old-pass")._auth_header:
+            return httpx.Response(401, json={"detail": "Invalid credentials"})
+        return httpx.Response(200, json=CARD)
+
+    client = make_client(fast_store, handler)
+    data, _ = asyncio.run(client.get("/racecards/rac_32300820643/pro", None, cache_kind=None, describe="race card"))
+    assert data["course"] == "Newmarket"
+    assert len(seen) == 2 and seen[0] != seen[1]
+    # A second 401 with the fresh credentials is a real error, not a loop.
+    with pytest.raises(ApiError):
+        asyncio.run(make_client(fast_store, lambda r: httpx.Response(401, json={"detail": "Invalid credentials"})).get(
+            "/racecards/rac_1/pro", None, cache_kind=None, describe="race card rac_1"))
 
 
 def test_network_failure_is_an_upstream_error(fast_store):

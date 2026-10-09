@@ -22,7 +22,7 @@ from urllib.parse import urlencode
 import httpx
 
 from core.config import CONFIG
-from core.credentials import CredentialError, get_credential
+from core.credentials import CredentialError, get_credential, reload_credentials
 from core.errors import ApiError
 from core.logging import log
 
@@ -92,15 +92,9 @@ def _retry_after_seconds(response: httpx.Response) -> float | None:
 
 
 def _upstream_detail(response: httpx.Response) -> str:
-    try:
-        body = response.json()
-    except ValueError:
-        return response.text.strip()[:200]
-    if isinstance(body, dict):
-        detail = body.get("detail") or body.get("message") or body.get("error")
-        if detail:
-            return str(detail)[:300]
-    return str(body)[:200]
+    """The upstream body, as is, trimmed only for length."""
+    text = response.text.strip()
+    return text[:500] if text else "(empty body)"
 
 
 class RacingApiClient:
@@ -251,6 +245,16 @@ class RacingApiClient:
             self.stats.last_status = response.status_code
             log(logger, logging.DEBUG if background else logging.INFO, "racing api call", path=path,
                 status=response.status_code, duration_ms=duration_ms, attempt=attempt, background=background)
+            if response.status_code == 401 and not getattr(self, "_reloaded_after_401", False):
+                # A rotated password: fetch the current secret versions once and try again.
+                self._reloaded_after_401 = True
+                reload_credentials()
+                self.forget_credentials()
+                auth = await self._basic_auth()
+                log(logger, logging.WARNING, "racing api 401: credentials reloaded from Secret Manager, retrying once", path=path)
+                continue
+            if response.status_code == 200:
+                self._reloaded_after_401 = False
             if response.status_code == 429 and attempt < max_retries:
                 attempt += 1
                 self.stats.retries_429 += 1
@@ -283,9 +287,14 @@ class RacingApiClient:
         detail = _upstream_detail(response)
         if status == 404:
             return ApiError(404, "NOT_FOUND", f"The Racing API has no {describe}: {detail or 'not found'}.", 404)
-        if status in (401, 403):
+        if status == 401:
             return ApiError(502, "UPSTREAM_ERROR",
-                            f"The Racing API refused FB12's credentials for {describe} (HTTP {status}): {detail}", status)
+                            f"The Racing API answered HTTP 401 for {describe}. Its body, as is: {detail}. "
+                            "A 401 can mean wrong credentials, a plan that does not cover the endpoint, or an overdue invoice.",
+                            status)
+        if status == 403:
+            return ApiError(502, "UPSTREAM_ERROR",
+                            f"The Racing API answered HTTP 403 for {describe}. Its body, as is: {detail}", status)
         if status == 429:
             return ApiError(503, "UPSTREAM_ERROR",
                             f"The Racing API is rate limiting FB12 for {describe}; retried {retries} times. Try again in a moment.",

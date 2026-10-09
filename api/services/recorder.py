@@ -497,6 +497,17 @@ class Recorder:
             "all_bsp": runners == with_bsp,
             "total_reported": pages[0].get("total") if pages else None,
         })
+        card_races = int(manifest["cards"].get("races") or 0)
+        if races == 0 and card_races > 0:
+            # The card shows racing but results came back empty: the plan does not reach this day.
+            section["status"] = "empty"
+            section["detail"] = (f"the API returned no results although the card has {card_races} races; "
+                                 "results on this plan do not reach this day. Older days are not asked for results.")
+            self.state["results_available_from"] = (day + timedelta(days=1)).isoformat()
+            self.state["results_available_from_detail"] = section["detail"]
+            await self._save_state()
+            log(logger, logging.WARNING, "recorder results empty for a racing day", date=day.isoformat(), card_races=card_races)
+            return
         if runners != with_bsp:
             section["detail"] = f"{runners - with_bsp} of {runners} runners have no BSP yet; the day is retried on the next run."
 
