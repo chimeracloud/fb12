@@ -121,14 +121,14 @@ def test_upstream_errors_are_returned_with_their_status_and_body(fast_store, sta
 
 def test_401_reloads_credentials_once_and_retries(fast_store, monkeypatch):
     """A rotated password: the first 401 makes the client re-read Secret Manager and retry."""
-    versions = iter([("old-user", "old-pass"), ("fb12-user", "new-pass")])
-    current = {"creds": next(versions)}
+    current = {"creds": ("old-user", "old-pass"), "reloads": 0}
 
     def fake_get_credential(name):
         return {"racing_api_username": current["creds"][0], "racing_api_password": current["creds"][1]}[name]
 
     def fake_reload():
-        current["creds"] = next(versions)
+        current["reloads"] += 1
+        current["creds"] = ("fb12-user", "new-pass")
 
     monkeypatch.setattr(racing_api, "get_credential", fake_get_credential)
     monkeypatch.setattr(racing_api, "reload_credentials", fake_reload)
@@ -143,11 +143,13 @@ def test_401_reloads_credentials_once_and_retries(fast_store, monkeypatch):
     client = make_client(fast_store, handler)
     data, _ = asyncio.run(client.get("/racecards/rac_32300820643/pro", None, cache_kind=None, describe="race card"))
     assert data["course"] == "Newmarket"
-    assert len(seen) == 2 and seen[0] != seen[1]
-    # A second 401 with the fresh credentials is a real error, not a loop.
-    with pytest.raises(ApiError):
-        asyncio.run(make_client(fast_store, lambda r: httpx.Response(401, json={"detail": "Invalid credentials"})).get(
-            "/racecards/rac_1/pro", None, cache_kind=None, describe="race card rac_1"))
+    assert len(seen) == 2 and seen[0] != seen[1] and current["reloads"] == 1
+    # A second 401 with the fresh credentials is a real error, not a loop: one reload, then the body as is.
+    always_401 = make_client(fast_store, lambda r: httpx.Response(401, json={"detail": "Invalid credentials"}))
+    with pytest.raises(ApiError) as excinfo:
+        asyncio.run(always_401.get("/racecards/rac_1/pro", None, cache_kind=None, describe="race card rac_1"))
+    assert excinfo.value.upstream_status == 401 and '{"detail":"Invalid credentials"}' in excinfo.value.message
+    assert current["reloads"] == 2
 
 
 def test_network_failure_is_an_upstream_error(fast_store):
@@ -219,7 +221,7 @@ def test_race_card_endpoint(app_with_racing, client, operator_headers):
 def test_race_card_not_found_and_bad_id(app_with_racing, client, operator_headers):
     response = client.get("/api/races/rac_0", headers=operator_headers)
     assert response.status_code == 404
-    assert response.json()["error"] == {"code": "NOT_FOUND", "message": "The Racing API has no race card rac_0: Not Found.", "upstream_status": 404}
+    assert response.json()["error"] == {"code": "NOT_FOUND", "message": 'The Racing API has no race card rac_0: {"detail":"Not Found"}.', "upstream_status": 404}
     assert client.get("/api/races/nonsense", headers=operator_headers).status_code == 400
 
 
