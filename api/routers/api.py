@@ -10,7 +10,10 @@ from fastapi import APIRouter, Query, Request
 
 from core.auth import METHOD_GOOGLE
 from core.errors import ApiError
-from models.schemas import CalculateRequest, CalculateResponse, MoveResponse, PaceResponse, RaceCard, RaceList
+from models.schemas import (
+    CalculateRequest, CalculateResponse, MoveResponse, PaceResponse, PaperCreated, PaperList, PaperRequest, RaceCard,
+    RaceList, SettleResponse,
+)
 from services.dutch import calculate
 from services.move import compute_move
 from services.pace import compute_pace
@@ -185,3 +188,37 @@ async def get_pace(
         "MIDFIELD": list(state.store.get("pace_midfield")),
     }
     return compute_pace(horse_id, data, lists, count)
+
+
+ENTRY_ID_RE = re.compile(r"^pe_[A-Za-z0-9_]+$")
+
+
+def _check_entry_id(entry_id: str) -> str:
+    if not ENTRY_ID_RE.match(entry_id):
+        raise ApiError(400, "INVALID_INPUT", f"{entry_id!r} is not a paper entry id (they look like pe_20261009T143000_a1b2c3).")
+    return entry_id
+
+
+@router.post("/paper", status_code=201, response_model=PaperCreated)
+async def post_paper(body: PaperRequest, request: Request) -> Any:
+    """Saves a paper entry. The API recalculates from the inputs; figures sent by the browser are never stored."""
+    credential = getattr(request.state, "credential", None)
+    saved_by = getattr(credential, "email", "unknown")
+    return await request.app.state.paper.create(body.model_dump(), saved_by=saved_by)
+
+
+@router.get("/paper", response_model=PaperList)
+async def list_paper(request: Request, status: str | None = Query(None, description="OPEN, SETTLED or NEEDS_REVIEW")) -> Any:
+    return {"entries": await request.app.state.paper.list(status)}
+
+
+@router.get("/paper/{entry_id}")
+async def get_paper(entry_id: str, request: Request) -> Any:
+    _check_entry_id(entry_id)
+    return await request.app.state.paper.get(entry_id)
+
+
+@router.post("/paper/{entry_id}/settle", response_model=SettleResponse)
+async def settle_paper(entry_id: str, request: Request) -> Any:
+    _check_entry_id(entry_id)
+    return await request.app.state.paper.settle(entry_id)

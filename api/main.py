@@ -21,13 +21,15 @@ from core.settings import FirestoreBackend, SettingsBackend, SettingsStore  # no
 from core.storage import GcsStore, ObjectStore  # noqa: E402
 from routers import admin, api  # noqa: E402
 from services.racing_api import RacingApiClient  # noqa: E402
+from services.paper import PaperStore  # noqa: E402
 from services.recorder import Recorder  # noqa: E402
 
 logger = logging.getLogger("fb12.main")
 
 
 def create_app(settings_backend: SettingsBackend | None = None,
-               recordings_store: ObjectStore | None = None) -> FastAPI:
+               recordings_store: ObjectStore | None = None,
+               paper_store: ObjectStore | None = None) -> FastAPI:
     metrics = Metrics()
     bus = EventBus()
     verifier = Verifier(CONFIG)
@@ -35,6 +37,7 @@ def create_app(settings_backend: SettingsBackend | None = None,
     store.on_change = lambda keys: bus.publish("settings", {"keys": keys, "updated_by": store.updated_by, "updated_at": store.updated_at})
     racing = RacingApiClient(store)
     recorder = Recorder(racing, recordings_store or GcsStore(CONFIG.recordings_bucket), store, bus)
+    paper = PaperStore(paper_store or GcsStore(CONFIG.paper_entries_bucket), racing, store)
 
     def forward_log(entry: dict) -> None:
         bus.publish("log", entry)
@@ -73,6 +76,7 @@ def create_app(settings_backend: SettingsBackend | None = None,
     app.state.racing = racing
     app.state.racing_stats = racing.stats
     app.state.recorder = recorder
+    app.state.paper = paper
 
     install_error_handlers(app)
     app.include_router(admin.router)

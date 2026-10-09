@@ -2,6 +2,12 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.6.0] — 2026-10-09 — paper entries and settlement
+
+### Added
+- `POST /api/paper`, `GET /api/paper?status=`, `GET /api/paper/{entry_id}`, `POST /api/paper/{entry_id}/settle` (`services/paper.py`). Entries are recalculated by the calculate function, stored one JSON object each in `gs://chiops-fb12-paper-entries` with the card as FB12 saw it, listed from an index, read back without the raw responses, and settled against `GET /results/{race_id}`: P&L at the saved prices, at SP straight away, at BSP once it lands (`bsp_pending` until then), `NEEDS_REVIEW` on a dead heat or a missing runner, `409 NO_RESULT_YET` before the result.
+- Tests: save, list, read back (figures equal the calculate function's; the stored object carries the card exactly), rejections, the no-result path, review on runners missing from the result, and the settlement maths on the real Goodwood result with its real SPs and BSPs (winner in the entry, BSP pending then filled, winner OUT or absent, dead heat, non runner, idempotent second settle).
+
 ## [web 0.2.0] — 2026-10-09 — move and pace columns
 
 ### Added

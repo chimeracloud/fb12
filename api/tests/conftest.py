@@ -72,7 +72,8 @@ def app(keypair, monkeypatch):
     from core.storage import MemoryStore
     import main as main_module
 
-    application = main_module.create_app(settings_backend=MemoryBackend(), recordings_store=MemoryStore("test-recordings"))
+    application = main_module.create_app(settings_backend=MemoryBackend(), recordings_store=MemoryStore("test-recordings"),
+                                         paper_store=MemoryStore("test-paper"))
     fake = FakeJWKClient(keypair.public_key)
     verifier = application.state.verifier
     monkeypatch.setattr(verifier, "_google_jwks", fake)

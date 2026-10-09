@@ -159,3 +159,66 @@ class PaceResponse(Strict):
     horse_id: str
     counts: PaceCounts
     runs: list[PaceRun]
+
+
+# --- API contract: paper entries ----------------------------------------------------
+
+PaperStatus = Literal["OPEN", "SETTLED", "NEEDS_REVIEW"]
+
+
+class PaperRunnerIn(Strict):
+    horse_id: str
+    price: float | None = None
+    card_price: float | None = None
+    price_edited: bool = False
+    tier: Tier
+    part_fraction: float | None = None
+
+
+class PaperRequest(Strict):
+    race_id: str
+    stake_total: float
+    commission_rate: float
+    runners: list[PaperRunnerIn]
+
+
+class PaperCreated(Strict):
+    entry_id: str
+    status: Literal["OPEN"]
+    saved_at: str
+    saved_by: str
+
+
+class PaperListItem(Strict):
+    entry_id: str
+    race_id: str
+    race_name: str | None
+    course: str | None
+    off_dt: str | None
+    saved_at: str
+    saved_by: str
+    status: PaperStatus
+    pnl: float | None
+    pnl_after_commission: float | None
+    pnl_at_sp: float | None
+    pnl_at_bsp: float | None
+    pnl_at_bsp_after_commission: float | None
+    bsp_pending: bool | None
+    review_reason: str | None
+
+
+class PaperList(Strict):
+    entries: list[PaperListItem]
+
+
+class SettleResponse(Strict):
+    entry_id: str
+    status: PaperStatus
+    winner: str | None
+    pnl: float | None
+    pnl_after_commission: float | None
+    pnl_at_sp: float | None
+    pnl_at_bsp: float | None
+    pnl_at_bsp_after_commission: float | None
+    bsp_pending: bool | None
+    review_reason: str | None
