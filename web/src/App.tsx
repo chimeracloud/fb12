@@ -2,6 +2,8 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import RaceListPage from "./pages/RaceListPage";
 import RacePage from "./pages/RacePage";
 import AdminPage from "./pages/AdminPage";
+import PaperPage from "./pages/PaperPage";
+import PaperEntryPage from "./pages/PaperEntryPage";
 
 export default function App() {
   return (
@@ -10,6 +12,7 @@ export default function App() {
         <div className="brand">Chimera Sports Trading <span className="muted">|</span> <b>FB12 Dutch</b></div>
         <nav className="nav">
           <NavLink to="/races">Races</NavLink>
+          <NavLink to="/paper">Paper entries</NavLink>
           <NavLink to="/admin">Admin</NavLink>
         </nav>
       </header>
@@ -18,6 +21,8 @@ export default function App() {
           <Route path="/" element={<Navigate to="/races" replace />} />
           <Route path="/races" element={<RaceListPage />} />
           <Route path="/race/:raceId" element={<RacePage />} />
+          <Route path="/paper" element={<PaperPage />} />
+          <Route path="/paper/:entryId" element={<PaperEntryPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<p className="muted">No such page.</p>} />
         </Routes>

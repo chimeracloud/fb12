@@ -2,6 +2,13 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [web 0.3.0] — 2026-10-09 — paper entries
+
+### Added
+- Paper entries page: race, course, off time, saved time, saved by, status, P&L, after commission, at SP, at BSP and BSP after commission, with a BSP pending marker; filter by status; Settle on OPEN entries (and Fetch BSP while pending) showing the API's message as returned; NEEDS_REVIEW rows show the reason; a row opens the entry.
+- Entry page: tiers, prices used with edited ones marked beside the card price, every figure from save time, the result with winner, positions, SP and BSP, and the settlement at saved prices, SP and BSP.
+- "Save as paper entry" on the results panel, then the entry id with links to the entry and the entries page.
+
 ## [0.6.0] — 2026-10-09 — paper entries and settlement
 
 ### Added

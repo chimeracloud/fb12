@@ -25,10 +25,10 @@ and one CHANGELOG at the root cover both.
 | Calculate (`POST /api/calculate`) | Deployed and checked live against the brief's figures (0.3.0) | `api/services/dutch.py` |
 | Recorder (`POST /api/record`) | Deployed and recording: 8 October 2026 and 17 March 2025 recorded live; Cloud Scheduler jobs created, backfill starts 00:00 UK | `api/services/recorder.py` |
 | Move and pace (`.../move`, `.../pace`) | Deployed and checked live (0.5.0): Holguin's move from the median of 26 bookmakers, his last five runs classified | `api/services/move.py`, `api/services/pace.py` |
-| Paper entries with SP and BSP settlement (`/api/paper`) | Pushed (0.6.0) | `api/services/paper.py` |
+| Paper entries with SP and BSP settlement (`/api/paper`) | Deployed and checked live (0.6.0): the cautious Challenge Stakes entry saved, listed, read back; settle answered NO_RESULT_YET before the off | `api/services/paper.py` |
 | GUI shell, race list, race page with grid and results panel, admin page | Pushed (web 0.1.0); deploys to pages.dev once Charles creates the Pages project; shows data once the subdomain and Access exist and the audience tag is set | `web/` |
 | GUI move and pace columns | Pushed (web 0.2.0) | `web/src/components/RunnerEvidence.tsx` |
-| GUI paper entries page and "Save as paper entry" | Follow their endpoints; no placeholders in the meantime | `web/` |
+| GUI paper entries page, entry page and "Save as paper entry" | Pushed (web 0.3.0) | `web/src/pages/PaperPage.tsx`, `PaperEntryPage.tsx` |
 
 Open items for Charles:
 - Rotate the Racing API password (it was pasted into a chat on 9 October 2026) and add it as a new version of `racingapi-password`. See docs/INCIDENTS.md.
@@ -170,9 +170,10 @@ bookmaker, owner, trainer, official rating, same-owner marker, tier with a PART
 fraction, and an "all fields" drawer per runner and for the race; the results
 panel, recalculated 300 ms after every change with the last figures dimmed while
 a call is in flight; Move and Pace columns that load per runner and show their
-own error with a retry), Admin (health, status, the settings form built from the
-field definitions, config, logs, live stream). The paper entries page arrives
-with its endpoints.
+own error with a retry; "Save as paper entry" below the results), Paper entries
+(filter by status; Settle and Fetch BSP; a row opens the entry with its tiers,
+prices, figures and result), Admin (health, status, the settings form built from
+the field definitions, config, logs, live stream).
 
 ## Repository layout
 
@@ -204,8 +205,8 @@ web/
   src/api/client.ts    same-origin fetch with the error envelope
   src/api/types.ts     the contract as TypeScript types
   src/lib/format.ts    money with losses in brackets, odds, percents, UK time
-  src/pages/           RaceListPage, RacePage, AdminPage
-  src/components/      ResultsPanel, SettingsFormView, RawDrawer, ErrorBox
+  src/pages/           RaceListPage, RacePage, PaperPage, PaperEntryPage, AdminPage
+  src/components/      ResultsPanel, RunnerEvidence (move and pace cells), SettingsFormView, RawDrawer, ErrorBox
   src/theme.css        the Chimera dark theme
 ```
 

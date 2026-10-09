@@ -1,4 +1,5 @@
-import type { CalculateResponse, CalculateRunnerOut, RunnerCard } from "../api/types";
+import { Link } from "react-router-dom";
+import type { CalculateResponse, CalculateRunnerOut, PaperCreated, RunnerCard } from "../api/types";
 import ErrorBox from "./ErrorBox";
 import { money, pct, pctValue, times } from "../lib/format";
 
@@ -10,6 +11,10 @@ interface Props {
   resultsByHorse: Record<string, CalculateRunnerOut>;
   onRetry: () => void;
   pending: boolean;
+  onSave: () => void;
+  saving: boolean;
+  saved: PaperCreated | null;
+  saveError: unknown;
 }
 
 function signed(value: number | null): JSX.Element {
@@ -18,7 +23,7 @@ function signed(value: number | null): JSX.Element {
 }
 
 // Every figure here comes from POST /api/calculate. The GUI never calculates.
-export default function ResultsPanel({ result, error, calculating, runners, resultsByHorse, onRetry, pending }: Props) {
+export default function ResultsPanel({ result, error, calculating, runners, resultsByHorse, onRetry, pending, onSave, saving, saved, saveError }: Props) {
   return (
     <div className="panel">
       <h2>Results</h2>
@@ -91,6 +96,18 @@ export default function ResultsPanel({ result, error, calculating, runners, resu
             </tbody>
           </table>
           <p className="small muted">{calculating ? "Recalculating…" : "Figures from POST /api/calculate."}</p>
+          <div className="toolbar">
+            <button className="primary" onClick={onSave} disabled={saving || calculating || !result.feasible}>
+              {saving ? "Saving…" : "Save as paper entry"}
+            </button>
+            {saved && (
+              <span>
+                Saved as <span className="mono">{saved.entry_id}</span> by {saved.saved_by}. <Link to={`/paper/${saved.entry_id}`}>Open it</Link> ·{" "}
+                <Link to="/paper">all entries</Link>
+              </span>
+            )}
+          </div>
+          {saveError && <ErrorBox error={saveError} onRetry={onSave} />}
         </div>
       )}
     </div>

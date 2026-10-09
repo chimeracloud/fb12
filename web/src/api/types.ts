@@ -188,3 +188,76 @@ export interface PaceResponse {
   counts: Record<PaceCategory, number>;
   runs: PaceRun[];
 }
+
+export type PaperStatus = "OPEN" | "SETTLED" | "NEEDS_REVIEW";
+
+export interface PaperRunnerIn {
+  horse_id: string;
+  price: number | null;
+  card_price: number | null;
+  price_edited: boolean;
+  tier: Tier;
+  part_fraction: number | null;
+}
+
+export interface PaperRequest {
+  race_id: string;
+  stake_total: number;
+  commission_rate: number;
+  runners: PaperRunnerIn[];
+}
+
+export interface PaperCreated {
+  entry_id: string;
+  status: "OPEN";
+  saved_at: string;
+  saved_by: string;
+}
+
+export interface PaperListItem {
+  entry_id: string;
+  race_id: string;
+  race_name: string | null;
+  course: string | null;
+  off_dt: string | null;
+  saved_at: string;
+  saved_by: string;
+  status: PaperStatus;
+  pnl: number | null;
+  pnl_after_commission: number | null;
+  pnl_at_sp: number | null;
+  pnl_at_bsp: number | null;
+  pnl_at_bsp_after_commission: number | null;
+  bsp_pending: boolean | null;
+  review_reason: string | null;
+}
+
+export interface SettleResponse {
+  entry_id: string;
+  status: PaperStatus;
+  winner: string | null;
+  pnl: number | null;
+  pnl_after_commission: number | null;
+  pnl_at_sp: number | null;
+  pnl_at_bsp: number | null;
+  pnl_at_bsp_after_commission: number | null;
+  bsp_pending: boolean | null;
+  review_reason: string | null;
+}
+
+export interface PaperEntry {
+  entry_id: string;
+  status: PaperStatus;
+  saved_at: string;
+  saved_by: string;
+  race: { race_id: string; race_name: string | null; course: string | null; off_dt: string | null; off_time_uk: string | null; card_fetched_at: string };
+  inputs: { stake_total: number; commission_rate: number; runners: (PaperRunnerIn & { horse: string })[] };
+  figures: CalculateResponse;
+  settlement: (SettleResponse & { winner_tier?: string | null; winner_stake?: number | null; winner_sp_dec?: number | null; winner_bsp?: number | null; settled_at?: string; note?: string | null }) | null;
+  result_summary: {
+    winner: string | null;
+    winners: string[];
+    positions: { position: string | null; horse_id: string | null; horse: string | null; sp: string | null; sp_dec: string | null; bsp: string | null; btn: string | null }[];
+    non_runners: string | null;
+  } | null;
+}

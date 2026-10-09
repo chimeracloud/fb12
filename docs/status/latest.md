@@ -1,25 +1,27 @@
 # FB12 — status
 
-**Unit:** FB12 Dutch (both halves). **Written:** 2026-10-09 16:20 UK, by the build agent.
+**Unit:** FB12 Dutch (both halves). **Written:** 2026-10-09 14:09 UK, by the build agent.
 
-**State:** API 0.4.2 deployed and recording; backfill changes (7-day BSP rule, one
-try a night, 150 s calls) live and proven on 2010-06-05. GUI web 0.1.0 pushed:
-shell, races, race page with results panel, admin. It deploys when Charles creates
+**State:** every API endpoint of the contract is deployed (0.6.0) and checked live
+except settlement against a published result, which waits for the Challenge
+Stakes result (off 14:25 UK today): paper entry `pe_20261009T130900_dcfa61` is
+saved and answers NO_RESULT_YET until then. The recorder is live and the backfill
+starts 00:00 UK. The GUI (web 0.3.0: races, race page with move, pace and the
+results panel, paper entries, admin) is pushed and deploys when Charles creates
 the Pages project.
 
 **Waiting for (from Charles):**
-- Since 16:20 UK: the Cloudflare Pages project (proposed name `fb12-dutch`) with
-  root `web`, build `npm run build`, output `dist`, `NODE_VERSION=22`, watch path
-  include `web/*`. Then the subdomain, the Access application and its audience tag.
-- Since 12:05 UK: the Racing API password rotation and new secret version.
+- The Cloudflare Pages project (proposed `fb12-dutch`; settings in the README),
+  then the subdomain, the Access application and its audience tag.
+- The Racing API password rotation and new secret version (since 12:05 UK).
 
-**Last did:** backfill changes, the GUI's first four steps.
+**Next:** settle the live entry once the result is published; confirm tonight's
+backfill from the manifests tomorrow; set the team domain and audience tag when
+they arrive; check the GUI through the subdomain.
 
-**Next:** move and pace in the API with their GUI columns; then paper entries with
-SP and BSP settlement and their page. Confirm tonight's backfill from the manifests
-tomorrow morning.
-
-**Found and reported, not acted on:** see README (deploy-time double instance; only
-`cloud@ascotwm.com` in gcloud here).
+**Found and reported, not acted on:** see README (deploy-time double instance;
+only `cloud@ascotwm.com` in gcloud here). Earlier status timestamps today were
+written from an estimate rather than the clock and ran up to three hours fast;
+from this entry they come from the clock.
 
 **Declined:** nothing.

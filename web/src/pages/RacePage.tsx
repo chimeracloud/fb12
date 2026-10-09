@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import type { CalculateRequest, CalculateResponse, RaceCard, RunnerCard, SettingsForm, Tier } from "../api/types";
+import type { CalculateRequest, CalculateResponse, PaperCreated, PaperRequest, RaceCard, RunnerCard, SettingsForm, Tier } from "../api/types";
 import ErrorBox from "../components/ErrorBox";
 import RawDrawer from "../components/RawDrawer";
 import ResultsPanel from "../components/ResultsPanel";
@@ -184,6 +184,41 @@ export default function RacePage() {
   useEffect(() => {
     if (debouncedRequest) void calculate(debouncedRequest);
   }, [debouncedRequest, calculate]);
+
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<PaperCreated | null>(null);
+  const [saveError, setSaveError] = useState<unknown>(null);
+
+  const savePaper = async () => {
+    if (!card || !request) return;
+    setSaving(true);
+    setSaveError(null);
+    setSaved(null);
+    try {
+      const body: PaperRequest = {
+        race_id: card.race.race_id,
+        stake_total: request.stake_total,
+        commission_rate: request.commission_rate,
+        runners: declared.map((r) => {
+          const state = runners[r.horse_id];
+          const tier: Tier = state?.tier ?? "OUT";
+          return {
+            horse_id: r.horse_id,
+            price: state?.price ?? null,
+            card_price: r.exchange_price,
+            price_edited: state?.edited ?? false,
+            tier,
+            part_fraction: tier === "PART" ? state?.partFraction ?? null : null,
+          };
+        }),
+      };
+      setSaved(await api<PaperCreated>("/api/paper", { method: "POST", body: JSON.stringify(body) }));
+    } catch (e) {
+      setSaveError(e);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const resultsByHorse = useMemo(() => {
     const map: Record<string, CalculateResponse["runners"][number]> = {};
@@ -380,6 +415,10 @@ export default function RacePage() {
         resultsByHorse={resultsByHorse}
         onRetry={() => debouncedRequest && void calculate(debouncedRequest)}
         pending={request === null}
+        onSave={savePaper}
+        saving={saving}
+        saved={saved}
+        saveError={saveError}
       />
     </div>
   );
