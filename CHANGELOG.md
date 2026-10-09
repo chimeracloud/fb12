@@ -7,6 +7,11 @@ All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 ### Fixed
 - The first Cloud Build run failed in the test stage: `test_stream_route_is_sse` asserted on Starlette's internal `route.methods`, which Starlette 1.7 (pulled by the build) no longer exposes. Replaced with a test of the endpoint's own behaviour: `/admin/stream` answers a streaming `text/event-stream` response. 48 of 49 tests had passed; the build context (`api`) and every `COPY` were right.
 
+### Deployed
+- First green build `61535281-b86b-40ab-ad9e-98b94ff9f106` on commit `a6a69af`; revision `fb12-dutch-api-00003-ztd` at https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app.
+- Checked live with an operator token (`cloud@ascotwm.com`): 401 with no credential, a bad token, and on both Cloud Run URLs, for every `/admin` and `/api` path and `/`; 200 on `/admin/health`, `/admin/status`, `/admin/settings`, `/admin/config`, `/admin/logs`; `/admin/stream` opens with the `hello` event; `PUT /admin/settings {"past_runs": 5}` wrote `fsu-admin-settings/fb12` in Firestore (`source: firestore`, `updated_by: cloud@ascotwm.com`); credentials shown masked with their secret names.
+- Found, not changed (Charles's to set): the service runs as the default compute service account, not `fb12-sa`; the trigger has no `api/**` path filter.
+
 ## [0.1.0] — 2026-10-09 — API shell
 
 ### Added

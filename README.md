@@ -19,10 +19,14 @@ and one CHANGELOG at the root cover both.
 
 | Part | State | Where |
 | --- | --- | --- |
-| API shell (admin endpoints, both credential paths) | Pushed to `main`, awaiting Charles's Cloud Run wizard for the first deploy | `api/` |
-| **Cloud Run URL** | **Not yet deployed.** Recorded here the moment the first build is green; prompt 2 needs it | — |
+| API shell (admin endpoints, both credential paths) | Deployed and checked, 9 October 2026 (revision `fb12-dutch-api-00003-ztd`, version 0.1.1) | `api/` |
+| **Cloud Run URL** | **https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app** (also answers at `https://fb12-dutch-api-991649774709.europe-west1.run.app`). Prompt 2 puts this in the Pages Function's config | europe-west1 |
 | Race list, race card, calculate, move, pace, paper entries | Not started | — |
 | GUI | Not started (prompt 2) | `web/` |
+
+Open items for Charles after the first deploy:
+- The wizard created the service on the default compute service account. The service identity must be `fb12-sa@chiops.iam.gserviceaccount.com` (Cloud Run → fb12-dutch-api → Edit and deploy new revision → Security → Service account). Until then the Racing API secrets cannot be read, which matters from the race list onwards.
+- The Cloud Build trigger has no included-files filter yet; `api/**` stops GUI pushes rebuilding the API.
 
 Current state in detail: [docs/status/latest.md](docs/status/latest.md).
 Incidents: [docs/INCIDENTS.md](docs/INCIDENTS.md).
@@ -60,8 +64,8 @@ logged in as an operator:
 
 ```bash
 TOKEN=$(gcloud auth print-identity-token)
-curl -s -H "Authorization: Bearer $TOKEN" https://<cloud-run-url>/admin/health
-curl -s -o /dev/null -w "%{http_code}\n" https://<cloud-run-url>/admin/health   # 401
+curl -s -H "Authorization: Bearer $TOKEN" https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app/admin/health
+curl -s -o /dev/null -w "%{http_code}\n" https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app/admin/health   # 401
 ```
 
 ## Resources
