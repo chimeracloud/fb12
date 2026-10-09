@@ -44,6 +44,10 @@ def create_app(settings_backend: SettingsBackend | None = None,
         bus.bind_loop(asyncio.get_running_loop())
         RING.add_listener(forward_log)
         await store.load()
+        try:
+            await recorder._ensure_loaded()
+        except Exception as exc:  # noqa: BLE001 - the service starts even if the bucket is unreachable
+            log(logger, logging.WARNING, "recorder index not loaded at startup", error=f"{type(exc).__name__}: {exc}")
         log(logger, logging.INFO, "fb12 started", version=VERSION, revision=Runtime.revision or None,
             settings_source=store.source, cloudflare_configured=CONFIG.access.cloudflare.configured,
             operators=len(CONFIG.access.google.operators))

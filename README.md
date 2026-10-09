@@ -286,17 +286,22 @@ manifest/_index.json                      per-day summary used to skip complete 
 manifest/_state.json                      availability boundaries learned from the API
 ```
 
-A day counts as complete only when every result carries BSP (plus the cards and
-every runner's odds history where the plan offers them). Incomplete days are
-retried on the next run: the daily run retries the last `recorder_retry_days`
-days, and the backfill picks the newest incomplete day first, so a day the
-morning run leaves without BSP is picked up that night. Every run on a day
-counts towards `recorder_max_attempts` (8); after that the day is left as it is
-and its manifest says why. Odds that the API answers 404 for are recorded as
-missing, not failed. A results page with no races on a day whose card has races
-means the plan does not reach that day: the day stays incomplete and older days
-are not asked for results. Days before 2023-01-23 are results only (no card, no
-odds); the backfill runs back to `backfill_earliest_date` (2005-01-01).
+Completeness: a day in the last `bsp_required_within_days` (7) is complete only
+when every result carries BSP, plus the cards and every runner's odds history
+where the plan offers them. An older day is complete once its results are
+stored, with the runners lacking BSP listed in the manifest under
+`results.runners_without_bsp` (BSP did not exist in 2005, and even recent days
+can have runners that never get one). Incomplete days are retried: the daily run
+retries the last `recorder_retry_days` days, and the backfill picks the newest
+incomplete day first, so a day the morning run leaves without BSP is picked up
+that night. The backfill tries an incomplete day at most once a night, then
+moves on. Every run on a day counts towards `recorder_max_attempts` (8); after
+that the day is left as it is and its manifest says why. Odds that the API
+answers 404 for are recorded as missing, not failed. A results page with no
+races on a day whose card has races means the plan does not reach that day: the
+day stays incomplete and older days are not asked for results. Days before
+2023-01-23 are results only (no card, no odds); the backfill runs back to
+`backfill_earliest_date` (2005-01-01).
 
 Overlap: one run at a time, enforced by an in-process lock on the single
 instance. A call that arrives while a run is in progress returns `409
@@ -311,10 +316,16 @@ Modes: `date=YYYY-MM-DD` records that day at any time. `date=yesterday` records
 yesterday (UK) and retries recent incomplete days. `date=backfill` records the
 newest day not yet complete, newest first, only inside the night window
 (`backfill_window_start_hour` to `backfill_window_end_hour`, 00:00 to 06:00 UK),
-and answers `skipped` outside it. One day per call: about 450 calls and 160
-seconds for a day with odds (8 October 2026 took 471 calls in 160 s), two or
-three calls for a results-only day before 2023. The backfill is about 275,000
-calls over about five nights.
+and answers `skipped` outside it. A backfill call keeps recording days, newest
+first, until it has used `backfill_call_budget_seconds` (150); the day in
+progress always finishes, so a big day can run past the budget but stays under
+the 900 s timeout. A day with odds is about 450 calls and 160 seconds
+(8 October 2026 took 471 calls in 160 s); a results-only day before 2023 is two
+or three calls. The backfill is about 275,000 calls over about six nights: the
+571 odds days in about five, the 7,400 results-only days behind them in about
+one. The backfill answer lists every day it recorded (`days`), `days_recorded`,
+`calls`, `elapsed_seconds`, `stopped_because` (budget, window or nothing left)
+and `remaining_estimate`.
 
 GUI calls go first: recorder calls are background calls that wait while any
 foreground request is in flight and share the same `request_rate_per_second`

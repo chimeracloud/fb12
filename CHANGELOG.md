@@ -2,6 +2,14 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.4.2] — 2026-10-09 — backfill: 7-day BSP rule, once a night, budgeted calls
+
+### Changed
+- Completeness: BSP is required only for days in the last `bsp_required_within_days` (7). An older day is complete once its results are stored, with runners lacking BSP listed in the manifest (`results.runners_without_bsp`). Stored results of an older day are not re-fetched.
+- The backfill tries an incomplete day at most once a night (UK date of its last attempt), then moves on, so one day can no longer be picked every 3 minutes all night.
+- A backfill call keeps recording days, newest first, until it has used `backfill_call_budget_seconds` (150), the day in progress always finishing. Response: `days`, `days_recorded`, `calls`, `elapsed_seconds`, `stopped_because`, `remaining_estimate`.
+- The recorder index is loaded at startup so `/admin/status` is right from the first call.
+
 ## [0.4.1] — 2026-10-09 — recording live; results back to 2005; rotation without a restart
 
 ### Added

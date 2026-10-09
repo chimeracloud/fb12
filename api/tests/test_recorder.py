@@ -77,6 +77,7 @@ def upstream():
 @pytest.fixture
 def recorder_app(app, upstream):
     app.state.store.values["request_rate_per_second"] = 5.0
+    app.state.store.values["backfill_call_budget_seconds"] = 1  # one day per call in tests; the day in progress finishes
     racing = RacingApiClient(app.state.store, transport=httpx.MockTransport(upstream.handler), base_url="https://racing.test/v1")
     app.state.racing = racing
     app.state.racing_stats = racing.stats
@@ -217,10 +218,54 @@ def test_backfill_outside_window_records_nothing(recorder_app, client, operator_
 def test_backfill_picks_the_newest_unrecorded_day(recorder_app, client, operator_headers, upstream, monkeypatch):
     monkeypatch.setattr(recorder_app.state.recorder, "in_backfill_window", lambda now=None: True)
     first = client.post("/api/record?date=backfill", headers=operator_headers).json()
-    assert first["date"] == yesterday_uk().isoformat() and first["complete"] is True
+    assert first["skipped"] is False and first["days_recorded"] == 1
+    assert first["date"] == yesterday_uk().isoformat() and first["days"][0]["complete"] is True
+    assert first["stopped_because"] == "budget"
     assert first["remaining_estimate"] > 300
     second = client.post("/api/record", headers=operator_headers).json()
     assert second["date"] == (yesterday_uk() - timedelta(days=1)).isoformat()
+
+
+def test_backfill_keeps_recording_days_until_its_budget_is_used(recorder_app, client, operator_headers, upstream, monkeypatch):
+    monkeypatch.setattr(recorder_app.state.recorder, "in_backfill_window", lambda now=None: True)
+    recorder_app.state.store.values["backfill_call_budget_seconds"] = 3
+    body = client.post("/api/record?date=backfill", headers=operator_headers).json()
+    assert body["days_recorded"] >= 2
+    dates = [d["date"] for d in body["days"]]
+    assert dates == sorted(dates, reverse=True)  # newest first
+    assert body["calls"] == sum(d["calls"] for d in body["days"])
+    assert body["elapsed_seconds"] >= 3
+
+
+def test_backfill_tries_an_incomplete_day_at_most_once_a_night(recorder_app, client, operator_headers, upstream, monkeypatch):
+    monkeypatch.setattr(recorder_app.state.recorder, "in_backfill_window", lambda now=None: True)
+    without_bsp = json.loads(json.dumps(RESULTS_PAGE))
+    without_bsp["results"][0]["runners"][0]["bsp"] = ""
+    upstream.results_page = without_bsp
+    first = client.post("/api/record?date=backfill", headers=operator_headers).json()
+    assert first["date"] == yesterday_uk().isoformat() and first["days"][0]["complete"] is False
+    # Still incomplete, but already tried tonight: the backfill moves on to the next day.
+    second = client.post("/api/record?date=backfill", headers=operator_headers).json()
+    assert second["date"] == (yesterday_uk() - timedelta(days=1)).isoformat()
+    assert yesterday_uk().isoformat() not in [d["date"] for d in second["days"]]
+
+
+def test_old_day_is_complete_without_bsp_and_lists_the_runners(recorder_app, client, operator_headers, upstream):
+    old_day = yesterday_uk() - timedelta(days=30)
+    without_bsp = json.loads(json.dumps(RESULTS_PAGE))
+    without_bsp["results"][0]["runners"][0]["bsp"] = ""
+    without_bsp["results"][0]["runners"][4]["bsp"] = "-"
+    upstream.results_page = without_bsp
+    body = client.post(f"/api/record?date={old_day.isoformat()}", headers=operator_headers).json()
+    assert body["complete"] is True and body["results"] == "ok"
+    manifest = json.loads(recorder_app.state.recorder.store.objects[manifest_key(old_day)][0])
+    assert manifest["results"]["bsp_required"] is False
+    assert manifest["results"]["runners_with_bsp"] == 6
+    assert [r["horse"] for r in manifest["results"]["runners_without_bsp"]] == ["Lake Forest (GB)", "Holguin (GB)"]
+    assert "counts as complete" in manifest["results"]["detail"]
+    # A recent day with the same gap stays incomplete.
+    recent = client.post(f"/api/record?date={yesterday_uk().isoformat()}", headers=operator_headers).json()
+    assert recent["complete"] is False
 
 
 def test_yesterday_mode_retries_incomplete_recent_days(recorder_app, client, operator_headers, upstream):

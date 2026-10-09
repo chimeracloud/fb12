@@ -80,7 +80,14 @@ def parse_mode(value: str | None) -> tuple[str, date | None]:
 
 def count_bsp(pages: list[dict[str, Any]]) -> tuple[int, int, int]:
     """(races, runners, runners with a BSP) across result pages."""
+    races, runners, with_bsp, _ = bsp_detail(pages)
+    return races, runners, with_bsp
+
+
+def bsp_detail(pages: list[dict[str, Any]]) -> tuple[int, int, int, list[dict[str, str]]]:
+    """(races, runners, runners with a BSP, the runners without one) across result pages."""
     races = runners = with_bsp = 0
+    without: list[dict[str, str]] = []
     for page in pages:
         for race in page.get("results") or []:
             races += 1
@@ -88,7 +95,18 @@ def count_bsp(pages: list[dict[str, Any]]) -> tuple[int, int, int]:
                 runners += 1
                 if str(runner.get("bsp") or "").strip() not in ("", "-"):
                     with_bsp += 1
-    return races, runners, with_bsp
+                else:
+                    without.append({"race_id": race.get("race_id"), "horse_id": runner.get("horse_id"), "horse": runner.get("horse")})
+    return races, runners, with_bsp, without
+
+
+def uk_date_of(iso_timestamp: str | None) -> date | None:
+    if not iso_timestamp:
+        return None
+    try:
+        return datetime.fromisoformat(iso_timestamp).astimezone(UK).date()
+    except ValueError:
+        return None
 
 
 def runners_from_cards(cards: dict[str, Any] | None) -> list[tuple[str, str]]:
@@ -186,8 +204,19 @@ class Recorder:
             "complete": bool(manifest.get("complete")),
             "attempts": int(manifest.get("attempts", 0)),
             "updated_at": manifest.get("finished_at"),
+            "last_attempt_at": manifest.get("finished_at"),
             "calls": manifest.get("calls"),
         }
+
+    def _eligible_for_backfill(self, entry: dict[str, Any] | None, today: date, max_attempts: int) -> bool:
+        if entry is None:
+            return True
+        if entry.get("complete"):
+            return False
+        if int(entry.get("attempts", 0)) >= max_attempts:
+            return False
+        # At most once a night: a day already attempted today (UK date) waits for tomorrow.
+        return uk_date_of(entry.get("last_attempt_at") or entry.get("updated_at")) != today
 
     async def _save_index(self) -> None:
         await put_json(self.store, INDEX_KEY, {"updated_at": now_iso(), "days": self.index})
@@ -222,6 +251,9 @@ class Recorder:
                 "learned": {k: v for k, v in self.state.items() if k != "updated_at"},
             },
             "backfill_window_uk": f"{int(self.settings.get('backfill_window_start_hour')):02d}:00-{int(self.settings.get('backfill_window_end_hour')):02d}:00",
+            "backfill_call_budget_seconds": int(self.settings.get("backfill_call_budget_seconds")),
+            "bsp_required_within_days": int(self.settings.get("bsp_required_within_days")),
+            "remaining_estimate": self._remaining_estimate(self.today_uk()) if self._loaded else None,
             "loaded": self._loaded,
         }
 
@@ -268,32 +300,52 @@ class Recorder:
                 response = self._response(mode, manifest)
                 response["retried"] = retried
                 return response
-            # backfill
+            # backfill: keep recording days, newest first, until the call's budget is used
             if not self.in_backfill_window():
                 return {
-                    "mode": mode, "skipped": True, "date": None,
+                    "mode": mode, "skipped": True, "date": None, "days": [],
                     "reason": f"outside the backfill window {self.snapshot()['backfill_window_uk']} UK; nothing recorded.",
                 }
-            target = self._pick_backfill_day(today)
-            if target is None:
+            budget = float(self.settings.get("backfill_call_budget_seconds"))
+            started = time.perf_counter()
+            days: list[dict[str, Any]] = []
+            stopped_because = "budget"
+            while True:
+                if not self.in_backfill_window():
+                    stopped_because = "window"
+                    break
+                target = self._pick_backfill_day(today, exclude={d["date"] for d in days})
+                if target is None:
+                    stopped_because = "nothing left"
+                    break
+                days.append(self._summary(await self._record_day(target, mode, by)))
+                if time.perf_counter() - started >= budget:
+                    stopped_because = "budget"
+                    break
+            elapsed = round(time.perf_counter() - started, 1)
+            if not days:
                 return {
-                    "mode": mode, "skipped": True, "date": None,
-                    "reason": f"backfill complete: every day from {self.settings.get('backfill_earliest_date')} to yesterday is recorded or has used its attempts.",
+                    "mode": mode, "skipped": True, "date": None, "days": [], "elapsed_seconds": elapsed,
+                    "reason": ("backfill complete: every day from "
+                               f"{self.settings.get('backfill_earliest_date')} to yesterday is recorded, has used its attempts, "
+                               "or was already tried tonight.") if stopped_because == "nothing left"
+                              else f"the backfill window closed; nothing recorded.",
                 }
-            manifest = await self._record_day(target, mode, by)
-            response = self._response(mode, manifest)
-            response["remaining_estimate"] = self._remaining_estimate(today)
-            return response
+            return {
+                "mode": mode, "skipped": False, "date": days[0]["date"], "days": days,
+                "days_recorded": len(days), "complete": all(d["complete"] for d in days),
+                "calls": sum(d.get("calls") or 0 for d in days), "elapsed_seconds": elapsed,
+                "stopped_because": stopped_because, "remaining_estimate": self._remaining_estimate(today),
+            }
 
-    def _pick_backfill_day(self, today: date) -> date | None:
+    def _pick_backfill_day(self, today: date, exclude: set[str] | None = None) -> date | None:
         earliest = self._date_setting("backfill_earliest_date")
         max_attempts = int(self.settings.get("recorder_max_attempts"))
+        exclude = exclude or set()
         day = today - timedelta(days=1)
         while day >= earliest:
-            entry = self.index.get(day.isoformat())
-            if entry is None:
-                return day
-            if not entry.get("complete") and int(entry.get("attempts", 0)) < max_attempts:
+            key = day.isoformat()
+            if key not in exclude and self._eligible_for_backfill(self.index.get(key), today, max_attempts):
                 return day
             day -= timedelta(days=1)
         return None
@@ -384,11 +436,17 @@ class Recorder:
         if self.bus is not None:
             self.bus.publish("recorder", {"phase": "done", **self._summary(manifest)})
 
+    def bsp_required(self, day: date) -> bool:
+        """BSP is required only for days in the last bsp_required_within_days. BSP did not exist in
+        2005, and even recent days can have runners that never get one."""
+        within = int(self.settings.get("bsp_required_within_days"))
+        return day >= self.today_uk() - timedelta(days=within)
+
     def _is_complete(self, day: date, manifest: dict[str, Any]) -> bool:
         cards_ok = manifest["cards"].get("status") in ("ok", "skipped", "unavailable")
         results = manifest["results"]
         results_ok = results.get("status") in ("skipped", "unavailable") or (
-            results.get("status") == "ok" and results.get("all_bsp") is True
+            results.get("status") == "ok" and (results.get("all_bsp") is True or not self.bsp_required(day))
         )
         odds = manifest["odds"]
         odds_ok = odds.get("status") in ("skipped", "ok")
@@ -462,7 +520,7 @@ class Recorder:
         if not required:
             section.update({"status": "skipped", "detail": why})
             return
-        if section.get("status") == "ok" and section.get("all_bsp"):
+        if section.get("status") == "ok" and (section.get("all_bsp") or not self.bsp_required(day)):
             return
         self._publish("results")
         page_size = int(self.settings.get("recorder_results_page_size"))
@@ -490,11 +548,13 @@ class Recorder:
             page_no += 1
             if got < page_size or got == 0 or (isinstance(total, int) and skip >= total):
                 break
-        races, runners, with_bsp = count_bsp(pages)
+        races, runners, with_bsp, without = bsp_detail(pages)
         section.update({
             "status": "ok", "keys": keys, "pages": len(keys), "fetched_at": fetched_at, "http_status": 200,
             "races": races, "runners": runners, "runners_with_bsp": with_bsp,
             "all_bsp": runners == with_bsp,
+            "runners_without_bsp": without,
+            "bsp_required": self.bsp_required(day),
             "total_reported": pages[0].get("total") if pages else None,
         })
         card_races = int(manifest["cards"].get("races") or 0)
@@ -509,7 +569,11 @@ class Recorder:
             log(logger, logging.WARNING, "recorder results empty for a racing day", date=day.isoformat(), card_races=card_races)
             return
         if runners != with_bsp:
-            section["detail"] = f"{runners - with_bsp} of {runners} runners have no BSP yet; the day is retried on the next run."
+            if self.bsp_required(day):
+                section["detail"] = f"{runners - with_bsp} of {runners} runners have no BSP yet; the day is retried on the next run."
+            else:
+                section["detail"] = (f"{runners - with_bsp} of {runners} runners have no BSP; the day is older than "
+                                     f"{self.settings.get('bsp_required_within_days')} days so it counts as complete with them listed.")
 
     # --- odds -------------------------------------------------------------------
 
