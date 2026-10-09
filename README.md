@@ -25,7 +25,7 @@ and one CHANGELOG at the root cover both.
 | Calculate (`POST /api/calculate`) | Deployed and checked live against the brief's figures (0.3.0) | `api/services/dutch.py` |
 | Recorder (`POST /api/record`) | Deployed and recording: 8 October 2026 and 17 March 2025 recorded live; Cloud Scheduler jobs created, backfill starts 00:00 UK | `api/services/recorder.py` |
 | Move and pace (`.../move`, `.../pace`) | Deployed and checked live (0.5.0): Holguin's move from the median of 26 bookmakers, his last five runs classified | `api/services/move.py`, `api/services/pace.py` |
-| Paper entries with SP and BSP settlement (`/api/paper`) | Deployed and checked live (0.6.0): the cautious Challenge Stakes entry saved, listed, read back; settle answered NO_RESULT_YET before the off | `api/services/paper.py` |
+| Paper entries with SP and BSP settlement (`/api/paper`) | Deployed and checked live (0.6.0): the cautious Challenge Stakes entry saved with saved_by set, listed, read back, and settled against the result (Never So Brave won; £0.00 at the saved prices; BSP pending) | `api/services/paper.py` |
 | GUI shell, race list, race page with grid and results panel, admin page | Live at https://fb12.chimerasportstrading.com behind Cloudflare Access | `web/` |
 | GUI move and pace columns | Pushed (web 0.2.0) | `web/src/components/RunnerEvidence.tsx` |
 | GUI paper entries page, entry page and "Save as paper entry" | Pushed (web 0.3.0) | `web/src/pages/PaperPage.tsx`, `PaperEntryPage.tsx` |

@@ -4,6 +4,9 @@ All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
 ## [0.6.1] — 2026-10-09 — the Cloudflare path opened
 
+### Recorded live
+- Paper entry `pe_20261009T130900_dcfa61` (the cautious version on the Challenge Stakes) settled at 14:39 UK: Never So Brave won as a BREAK_EVEN runner, P&L £0.00 at the saved prices, (£16.65) at SP, BSP pending until it lands.
+
 ### Changed
 - `api/config/fb12.json`: `access.cloudflare.team_domain` = `chimera-cape.cloudflareaccess.com`, `audience_tag` = the FB12 Access application's tag. Read from Access's own login redirect on `fb12.chimerasportstrading.com`, where the token was already arriving through the Pages Function and being refused as "cloudflare access is not configured". The team domain differs from the June inventory's.
 
