@@ -1,0 +1,29 @@
+{
+  "_note": "Real Racing API ResultsStandardPage from GET /horses/hrs_29228423/results?start_date=2015-01-01&end_date=2026-10-08&limit=2, fetched 2026-10-09, reduced to the fields FB12 reads. Comments are the raw running comments as received. Not invented.",
+  "results": [
+    {"race_id": "rac_11991616", "date": "2026-07-28", "region": "GB", "course": "Goodwood", "off_dt": "2026-07-28T15:00:00+01:00",
+     "race_name": "Hkjc World Pool Lennox Stakes (Group 2)", "type": "Flat", "class": "Class 1", "pattern": "Group 2", "dist": "7f", "going": "Good",
+     "runners": [
+       {"horse_id": "hrs_35828233", "horse": "Lake Forest (GB)", "position": "1", "sp_dec": "1.91", "bsp": "2.05", "comment": "Held up towards the back - shifted left and driven for progress 2f out - up into fourth inside the final furlong - finished strongly to score late"},
+       {"horse_id": "hrs_45378340", "horse": "Rogue Diplomat (IRE)", "position": "2", "sp_dec": "17.00", "bsp": "23.00", "comment": "Steered right early - settled towards back - urged forward past the furlong marker - powered home approaching the last furlong - moved into second close home - edged out narrowly for the win"},
+       {"horse_id": "hrs_35149667", "horse": "Witness Stand (GB)", "position": "3", "sp_dec": "9.50", "bsp": "10.88", "comment": "Set the pace early - driven on approaching 2f out to stretch clear - under pressure with a furlong left - overtaken and edged out of second near the line - stuck on for third"},
+       {"horse_id": "hrs_36354157", "horse": "Qirat (GB)", "position": "4", "sp_dec": "5.00", "bsp": "5.36", "comment": "Settled just behind the leader - urged forward with 2f left and battled on - edged back in the last 110yds finishing without further response"},
+       {"horse_id": "hrs_29228423", "horse": "Holguin (GB)", "position": "5", "sp_dec": "19.00", "bsp": "27.39", "comment": "Held up towards the back - made headway 2f out - driven approaching final furlong - kept on same gait to the line finishing 5th"},
+       {"horse_id": "hrs_42452102", "horse": "Marvelman (IRE)", "position": "6", "sp_dec": "10.00", "bsp": "12.50", "comment": "Sat close to the pace - asked for effort 2f out - weakened inside final furlong to finish sixth"},
+       {"horse_id": "hrs_35813260", "horse": "Poet Master (IRE)", "position": "7", "sp_dec": "15.00", "bsp": "17.50", "comment": "Took strong hold in midfield - urged forward with over 2f to run - faded inside final furlong to finish 7th beaten 6.25 lengths"},
+       {"horse_id": "hrs_55211086", "horse": "Lord Britain (GB)", "position": "8", "sp_dec": "51.00", "bsp": "90.00", "comment": "Sat close to the front group early - urged forward with over 2f left - lost touch soon after and beaten home"}
+     ]},
+    {"race_id": "rac_11991174", "date": "2026-07-11", "region": "GB", "course": "Chester", "off_dt": "2026-07-11T15:52:00+01:00",
+     "race_name": "Raymond & Kathleen Corbett Memorial City Plate Stakes (Listed)", "type": "Flat", "class": "Class 1", "pattern": "Listed", "dist": "7f1y", "going": "Good",
+     "runners": [
+       {"horse_id": "hrs_55915909", "horse": "Northern Champion (IRE)", "position": "1", "sp_dec": "7.50", "bsp": "9.72", "comment": "raced handy - roused along 2f out - went to the front final 110yds - held on by a narrow margin"},
+       {"horse_id": "hrs_42521885", "horse": "Dash Of Azure (GB)", "position": "2", "sp_dec": "8.00", "bsp": "9.10", "comment": "raced in mid-division - driven over 1f out - made late progress in the final furlong - moved into second in the closing stages - unable to get to the winner"},
+       {"horse_id": "hrs_29228423", "horse": "Holguin (GB)", "position": "3", "sp_dec": "6.00", "bsp": "7.80", "comment": "pulled hard early - raced handy - driven into the front over 1f out - continued well in the final furlong - overtaken final 110yds - dropped out of second approaching the line - narrowly retained third"},
+       {"horse_id": "hrs_54965554", "horse": "Five Ways (GB)", "position": "4", "sp_dec": "11.00", "bsp": "13.00", "comment": "settled off the pace - driven 2f out - made headway 1f out - ran on in the final furlong - denied third by a short margin"},
+       {"horse_id": "hrs_35149667", "horse": "Witness Stand (GB)", "position": "6", "sp_dec": "3.00", "bsp": "3.59", "comment": "travelled wide and close up - driven over 2f out - faded quickly"},
+       {"horse_id": "hrs_412653038", "horse": "Myal (GB)", "position": "7", "sp_dec": "6.50", "bsp": "7.31", "comment": "made the running - roused along 2f out - drifted right and was overtaken over 1f out before fading in the final furlong"},
+       {"horse_id": "hrs_24686508", "horse": "Roman Dragon (GB)", "position": "9", "sp_dec": "51.00", "bsp": "100.00", "comment": "settled towards the back - pressed for a response over 2f out - not a factor throughout"}
+     ]}
+  ],
+  "total": 21, "limit": 2, "skip": 0, "query": []
+}

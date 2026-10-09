@@ -10,10 +10,14 @@ from fastapi import APIRouter, Query, Request
 
 from core.auth import METHOD_GOOGLE
 from core.errors import ApiError
-from models.schemas import CalculateRequest, CalculateResponse, RaceCard, RaceList
+from models.schemas import CalculateRequest, CalculateResponse, MoveResponse, PaceResponse, RaceCard, RaceList
 from services.dutch import calculate
+from services.move import compute_move
+from services.pace import compute_pace
 from services.recorder import parse_mode
-from services.races import UK, map_race_card, map_race_summary
+from datetime import date as date_type, timedelta
+
+from services.races import UK, map_race_card, map_race_summary, parse_off_dt
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -111,3 +115,73 @@ async def post_record(request: Request, date: str | None = Query(None, descripti
         raise ApiError(401, "UNAUTHENTICATED", "Not authenticated.")
     mode, day = parse_mode(date)
     return await request.app.state.recorder.record(mode, day, by=credential.email)
+
+
+HORSE_ID_RE = re.compile(r"^hrs_[A-Za-z0-9]+$")
+
+
+def _check_horse_id(horse_id: str) -> str:
+    if not HORSE_ID_RE.match(horse_id):
+        raise ApiError(400, "INVALID_INPUT", f"{horse_id!r} is not a Racing API horse id (they look like hrs_12345).")
+    return horse_id
+
+
+async def _race_day(state: Any, race_id: str) -> date_type:
+    """The race's date (UK), from the cached card."""
+    data, _ = await state.racing.get(f"/racecards/{race_id}/pro", None, cache_kind="race_card", describe=f"race card {race_id}")
+    if not isinstance(data, dict):
+        raise ApiError(502, "UPSTREAM_ERROR", f"The Racing API's card for {race_id} was not an object.")
+    text = str(data.get("date") or "").strip()
+    if text:
+        try:
+            return date_type.fromisoformat(text)
+        except ValueError:
+            pass
+    off = parse_off_dt(data.get("off_dt"))
+    if off is None:
+        raise ApiError(502, "UPSTREAM_ERROR", f"The Racing API's card for {race_id} carries no usable date or off time.")
+    return off.astimezone(UK).date()
+
+
+@router.get("/races/{race_id}/runners/{horse_id}/move", response_model=MoveResponse)
+async def get_move(race_id: str, horse_id: str, request: Request) -> Any:
+    state = request.app.state
+    _check_race_id(race_id)
+    _check_horse_id(horse_id)
+    race_day = await _race_day(state, race_id)
+    data, _ = await state.racing.get(
+        f"/odds/{race_id}/{horse_id}", None, cache_kind="odds", describe=f"odds history for {horse_id} in {race_id}",
+    )
+    if not isinstance(data, dict):
+        raise ApiError(502, "UPSTREAM_ERROR", f"The Racing API's odds history for {horse_id} in {race_id} was not an object.")
+    return compute_move(horse_id, data, race_day)
+
+
+@router.get("/races/{race_id}/runners/{horse_id}/pace", response_model=PaceResponse, response_model_by_alias=True)
+async def get_pace(
+    race_id: str,
+    horse_id: str,
+    request: Request,
+    runs: int | None = Query(None, ge=1, le=50, description="Past runs to read; default from settings"),
+) -> Any:
+    state = request.app.state
+    _check_race_id(race_id)
+    _check_horse_id(horse_id)
+    count = int(runs or state.store.get("past_runs"))
+    race_day = await _race_day(state, race_id)
+    end_date = (race_day - timedelta(days=1)).isoformat()
+    data, _ = await state.racing.get(
+        f"/horses/{horse_id}/results",
+        {"start_date": "2000-01-01", "end_date": end_date, "limit": count},
+        cache_kind="past_runs",
+        describe=f"past runs of {horse_id} before {race_day.isoformat()}",
+    )
+    if not isinstance(data, dict):
+        raise ApiError(502, "UPSTREAM_ERROR", f"The Racing API's results for {horse_id} were not an object.")
+    lists = {
+        "LED": list(state.store.get("pace_led")),
+        "PROMINENT": list(state.store.get("pace_prominent")),
+        "HELD_UP": list(state.store.get("pace_held_up")),
+        "MIDFIELD": list(state.store.get("pace_midfield")),
+    }
+    return compute_pace(horse_id, data, lists, count)

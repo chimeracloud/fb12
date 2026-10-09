@@ -2,6 +2,13 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.5.0] — 2026-10-09 — move and pace
+
+### Added
+- `GET /api/races/{race_id}/runners/{horse_id}/move` (`services/move.py`): bookmaker median first, Betfair Exchange only when no bookmaker has history; SP and dash entries skipped; exchange prices outside the minute's bookmaker range dropped; first price at 00:00 UK on race day with evening prices carried forward; `note` explains the figure or its absence.
+- `GET /api/races/{race_id}/runners/{horse_id}/pace?runs=` (`services/pace.py`): the horse's own comment in each of its last N runs before race day, matched as whole phrases on word boundaries against the `pace_*` settings in list order; anything else UNCLASSIFIED. Contract addition: each run carries `category`.
+- Tests on Holguin's real odds history (Bet365 and Betfair Exchange, 8 and 9 October 2026) and his two real past runs with every runner's real running comment: the median path, the exchange fallback with two prices dropped, no history, unchanged and shortened moves, fourteen real comments classified, list order, the endpoints and their input checks.
+
 ## [web 0.1.0] — 2026-10-09 — GUI shell, race list, race page, results panel, admin
 
 ### Added

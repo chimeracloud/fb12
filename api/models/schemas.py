@@ -120,3 +120,42 @@ class CalculateResponse(Strict):
     expected_value_gbp: float | None
     expected_value_pct: float | None
     runners: list[CalculateRunnerOut]
+
+
+# --- API contract: move and pace -------------------------------------------------
+
+class MoveResponse(Strict):
+    horse_id: str
+    source: Literal["bookmaker median", "Betfair Exchange"] | None
+    first_price: float | None
+    first_at: str | None
+    latest_price: float | None
+    latest_at: str | None
+    change_pct: float | None
+    direction: Literal["shortened", "drifted", "unchanged"] | None
+    note: str | None
+
+
+class PaceRun(Strict):
+    date: str | None
+    course: str | None
+    race_name: str | None
+    position: str | None
+    race_class: str | None = Field(None, alias="class")
+    comment: str | None
+    category: Literal["LED", "PROMINENT", "MIDFIELD", "HELD_UP", "UNCLASSIFIED"]
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class PaceCounts(Strict):
+    LED: int
+    PROMINENT: int
+    MIDFIELD: int
+    HELD_UP: int
+    UNCLASSIFIED: int
+
+
+class PaceResponse(Strict):
+    horse_id: str
+    counts: PaceCounts
+    runs: list[PaceRun]
