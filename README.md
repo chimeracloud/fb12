@@ -21,8 +21,9 @@ and one CHANGELOG at the root cover both.
 | --- | --- | --- |
 | API shell (admin endpoints, both credential paths) | Deployed and checked, 9 October 2026 (revision `fb12-dutch-api-00003-ztd`, version 0.1.1) | `api/` |
 | **Cloud Run URL** | **https://fb12-dutch-api-jptjmb2mfq-ew.a.run.app** (also answers at `https://fb12-dutch-api-991649774709.europe-west1.run.app`). Prompt 2 puts this in the Pages Function's config | europe-west1 |
-| Race list and race card (`GET /api/races`, `GET /api/races/{race_id}`) | Pushed (version 0.2.0); live check pending the service identity switch to fb12-sa, which the Racing API secrets need | `api/services/` |
-| Calculate, move, pace, paper entries | Not started | — |
+| Race list and race card (`GET /api/races`, `GET /api/races/{race_id}`) | Deployed (0.2.0). Live check blocked until the service identity is fb12-sa: the default compute account cannot read the Racing API secrets | `api/services/races.py` |
+| Calculate (`POST /api/calculate`) | Pushed (0.3.0); the brief's eight test cases run in the build | `api/services/dutch.py` |
+| Move, pace, paper entries | Not started | — |
 | GUI | Not started (prompt 2) | `web/` |
 
 Open items for Charles after the first deploy:
@@ -161,6 +162,12 @@ stored value governs; the code default only applies until something is stored.
 | `pace_led`, `pace_prominent`, `pace_held_up`, `pace_midfield` | the lists in the brief | Matched in that order, first match wins; anything else is UNCLASSIFIED |
 | `racing_api_username`, `racing_api_password` | masked | Read only; values never leave the credential module |
 
+The service must run as `fb12-sa`. `GET /admin/status` and `GET /admin/config`
+report the identity the service actually runs as against the expected one, and a
+secret permission failure names that identity in its message. A `PermissionDenied`
+on a secret is an identity problem; the credential values are never the answer
+and are never needed anywhere.
+
 Credentials: `core/credentials.py` is the one place FB12 reads a credential.
 Secret Manager sits behind `get_credential(name)` today (interim, per
 CHI-POL-040); values live in memory for the life of the process and are never
@@ -199,7 +206,9 @@ shown as is.
    `{"horse_id", "counts": {"LED", "PROMINENT", "MIDFIELD", "HELD_UP", "UNCLASSIFIED"}, "runs": [{"date", "course", "race_name", "position", "class", "comment"}]}`, runs newest first, comment raw.
 5. `POST /api/calculate` body `{"stake_total", "commission_rate", "runners": [{"horse_id", "horse", "price", "tier", "part_fraction"}]}` →
    `{"feasible", "message", "profit_per_win", "book_pct", "expected_value_gbp", "expected_value_pct", "runners": [{"horse_id", "horse", "tier", "price", "stake", "return_if_wins", "net_if_wins", "net_after_commission", "market_chance", "break_even_chance", "can_break_even", "wins_wiped_out"}]}`.
-   No Racing API call, nothing stored. The only place figures are worked out.
+   No Racing API call, nothing stored. The only place figures are worked out (`services/dutch.py`); paper entries call the same function.
+   The maths: T total stake, q = 1 / price. Targets: PROFIT T + P, BREAK_EVEN T, PART part_fraction × T, OUT 0; stake = target / price, so the stakes sum to T. P = T × (1 − Σq over PROFIT and BREAK_EVEN − Σ part_fraction × q over PART) / Σq over PROFIT. No PROFIT runner or P ≤ 0: `feasible` false with the reason in `message`, and stakes, returns, nets, the profit and the expected value are null; nothing is forced. `book_pct` is Σq over every runner (every runner needs a price; if one lacks it, `message` names it and `book_pct`, `market_chance` and the expected value are null). `market_chance` = q / book. Expected value = Σ market_chance × net_if_wins, in pounds and as a percent of T. For OUT and PART runners: `break_even_chance` = E / (E + L) where E is the expected net if that runner does not win (the others' chances rescaled to sum to 1) and L the loss if it does; `can_break_even` is false and the chance null when E ≤ 0; `wins_wiped_out` = L / P. `net_after_commission` reduces a positive net by the commission rate; a loss is unchanged. Rounding: money 2 dp, chances 4 dp, percents 2 dp; the unrounded stakes sum to T exactly.
+   Validation (`400 INVALID_INPUT`, every problem listed): stake_total > 0; 0 ≤ commission_rate < 1; price required unless OUT and always above 1.0; part_fraction required for PART, 0 to 1, and only for PART; no horse_id twice.
 6. `POST /api/paper` body `{"race_id", "stake_total", "commission_rate", "runners": [{"horse_id", "price", "card_price", "price_edited", "tier", "part_fraction"}]}` → `201 {"entry_id", "status": "OPEN", "saved_at", "saved_by"}`
 7. `GET /api/paper?status=` → `{"entries": [{"entry_id", "race_id", "race_name", "course", "off_dt", "saved_at", "saved_by", "status" (OPEN, SETTLED or NEEDS_REVIEW), "pnl", "pnl_after_commission", "review_reason"}]}`
 8. `GET /api/paper/{entry_id}` → the entry without the raw API responses.
@@ -210,10 +219,10 @@ shown as is.
 | Endpoint | Returns |
 | --- | --- |
 | `GET /admin/health` | `{"status": "ok", "service", "unit", "version", "revision", "time", "uptime_seconds", "settings_source"}` |
-| `GET /admin/status` | `{"service", "unit", "version", "revision", "mode": "paper", "time", "started_at", "uptime_seconds", "requests": {"total", "errors", "error_rate", "by_status"}, "access": {"accepted": {"cloudflare_access", "google_id_token"}, "rejected", "cloudflare_configured", "operators"}, "settings": {"source", "updated_at", "updated_by", "last_error"}, "credentials": {name: "loaded" or "not loaded"}, "racing_api" (null until step 2), "stream": {"subscribers", "events_published", "events_dropped"}}` |
+| `GET /admin/status` | `{"service", "unit", "version", "revision", "mode": "paper", "time", "started_at", "uptime_seconds", "requests": {"total", "errors", "error_rate", "by_status"}, "access": {"accepted": {"cloudflare_access", "google_id_token"}, "rejected", "cloudflare_configured", "operators"}, "settings": {"source", "updated_at", "updated_by", "last_error"}, "credentials": {name: "loaded" or "not loaded"}, "identity": {"runs_as", "expected", "matches"}, "racing_api" (counters, see The Racing API below), "stream": {"subscribers", "events_published", "events_dropped"}}` |
 | `GET /admin/settings` | The form: `{"service", "unit", "storage": {"backend", "path"}, "source", "updated_at", "updated_by", "last_loaded_at", "last_error", "groups": [{"id", "label", "fields": [{"key", "label", "type", "value", "default", "writable", "help", "min", "max", "step"}]}]}`. Field types: `number`, `integer`, `boolean`, `string`, `list`, `secret`. A `secret` field has `value` masked, `writable` false, plus `secret` (the Secret Manager name) and `state`. Read from Firestore on every call. |
 | `PUT /admin/settings` | Body `{"values": {key: value}}`. Returns `{"applied": [keys], "rejected": [{"key", "reason"}], "settings": the form}`. Persisted to Firestore before anything is applied in memory; a failed write returns `502 UPSTREAM_ERROR` and changes nothing. `updated_by` is the credential's email. |
-| `GET /admin/config` | Deployment reference: project, region, Cloud Run service and revision, Python version, Racing API base URL, bucket, Firestore path, access config (team domain, audience tag, operators, audience rule), credential secret names with masked values, pipeline. |
+| `GET /admin/config` | Deployment reference: project, region, Cloud Run service and revision, the identity the service runs as against the one expected (`cloud_run.identity`), Python version, Racing API base URL, bucket, Firestore path, access config (team domain, audience tag, operators, audience rule), credential secret names with masked values, pipeline. |
 | `GET /admin/logs?limit=100&before=&severity=` | `{"entries": [...newest first], "count", "limit", "newest_seq", "oldest_seq", "next_before", "buffer_size"}`. Each entry: `timestamp`, `severity`, `service_name`, `trace_id`, `logger`, `message`, `seq`, plus the structured fields of that line. In-memory ring buffer of the last 1000 entries of this instance. |
 | `GET /admin/stream` | Server-Sent Events. First event `hello` carries the status snapshot. Then `log` (each log entry, `id` = its seq), `settings` (keys changed, by whom) and a `status` heartbeat every 15 seconds of silence. Every event's data is `{"event", "time", "data"}`. Cloud Run closes long requests at its timeout; the client reconnects. |
 

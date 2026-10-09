@@ -2,6 +2,19 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.3.0] — 2026-10-09 — calculate, and the identity named in permission errors
+
+### Added
+- `POST /api/calculate` (`services/dutch.py`): the graded dutch maths as the brief states it, the one code path for figures. Feasibility (no PROFIT runner, or P ≤ 0) returns `feasible: false` with the reason and no forced numbers. A runner without a price leaves the book, market chances and expected value null and is named in `message`. Break-even chance, can-break-even and wins-wiped-out for OUT and PART runners. Full input validation with every problem listed.
+- Tests: the brief's eight cases on the 08:12 Betfair Exchange prices of the Challenge Stakes (profit per win 71.22 / 20.16 / 12.37; the stakes; book 103.03; expected value −2.94; Holguin 0.0555 / 0.0268 / 1.40, 4.96, 8.08; Witness Stand 0.0882 / 0.0312; £12.13 after 2% commission; a £50 loss unchanged), the identity EV = T × (1/book − 1), unrounded stakes summing to T for several totals, infeasible cases, missing prices, cannot-break-even, validation, and the endpoint against the function.
+- `core/identity.py`: the service account the process runs as, from the metadata server. `GET /admin/status` and `GET /admin/config` show it against the expected `fb12-sa` (new committed config field `service_account`).
+
+### Changed
+- A `PermissionDenied` reading a secret now says which identity lacked access and that the Cloud Run service must run as `fb12-sa`, so it cannot be read as a credential problem. See docs/INCIDENTS.md, 2026-10-09.
+
+### Incident
+- Racing API username and password pasted into the agent chat while the race endpoints were failing on an identity problem. Not used, not stored. Rotation is Charles's; open until done. Recorded in `docs/INCIDENTS.md`.
+
 ## [0.2.0] — 2026-10-09 — race list and race card
 
 ### Added

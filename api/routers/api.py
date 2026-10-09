@@ -9,7 +9,8 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 
 from core.errors import ApiError
-from models.schemas import RaceCard, RaceList
+from models.schemas import CalculateRequest, CalculateResponse, RaceCard, RaceList
+from services.dutch import calculate
 from services.races import UK, map_race_card, map_race_summary
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -91,3 +92,10 @@ async def get_race(race_id: str, request: Request) -> Any:
     if not isinstance(data, dict) or "runners" not in data:
         raise ApiError(502, "UPSTREAM_ERROR", f"The Racing API's card for {race_id} had no runners field.")
     return map_race_card(data, fetched_at)
+
+
+@router.post("/calculate", response_model=CalculateResponse)
+async def post_calculate(body: CalculateRequest) -> Any:
+    """The maths, nothing else: no Racing API call, nothing stored."""
+    result = calculate(body.stake_total, body.commission_rate, [r.model_dump() for r in body.runners])
+    return result.to_contract()

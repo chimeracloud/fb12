@@ -74,3 +74,47 @@ class RaceCard(Strict):
     race: RaceHeader
     fetched_at: str
     runners: list[RunnerCard]
+
+
+# --- API contract: calculate -------------------------------------------------
+
+Tier = Literal["PROFIT", "BREAK_EVEN", "PART", "OUT"]
+
+
+class CalculateRunnerIn(Strict):
+    horse_id: str
+    horse: str
+    price: float | None = None
+    tier: Tier
+    part_fraction: float | None = None
+
+
+class CalculateRequest(Strict):
+    stake_total: float
+    commission_rate: float
+    runners: list[CalculateRunnerIn]
+
+
+class CalculateRunnerOut(Strict):
+    horse_id: str
+    horse: str
+    tier: Tier
+    price: float | None
+    stake: float | None
+    return_if_wins: float | None
+    net_if_wins: float | None
+    net_after_commission: float | None
+    market_chance: float | None
+    break_even_chance: float | None
+    can_break_even: bool | None
+    wins_wiped_out: float | None
+
+
+class CalculateResponse(Strict):
+    feasible: bool
+    message: str | None
+    profit_per_win: float | None
+    book_pct: float | None
+    expected_value_gbp: float | None
+    expected_value_pct: float | None
+    runners: list[CalculateRunnerOut]
