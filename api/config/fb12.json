@@ -20,8 +20,8 @@
   },
   "access": {
     "cloudflare": {
-      "team_domain": "",
-      "audience_tag": ""
+      "team_domain": "chimera-cape.cloudflareaccess.com",
+      "audience_tag": "b4f8e86cf11436ee2bf009750ac3b714ea0b305101753ae2e2c0e321ed43fa4b"
     },
     "google": {
       "operators": [

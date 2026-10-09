@@ -26,7 +26,7 @@ and one CHANGELOG at the root cover both.
 | Recorder (`POST /api/record`) | Deployed and recording: 8 October 2026 and 17 March 2025 recorded live; Cloud Scheduler jobs created, backfill starts 00:00 UK | `api/services/recorder.py` |
 | Move and pace (`.../move`, `.../pace`) | Deployed and checked live (0.5.0): Holguin's move from the median of 26 bookmakers, his last five runs classified | `api/services/move.py`, `api/services/pace.py` |
 | Paper entries with SP and BSP settlement (`/api/paper`) | Deployed and checked live (0.6.0): the cautious Challenge Stakes entry saved, listed, read back; settle answered NO_RESULT_YET before the off | `api/services/paper.py` |
-| GUI shell, race list, race page with grid and results panel, admin page | Pushed (web 0.1.0); deploys to pages.dev once Charles creates the Pages project; shows data once the subdomain and Access exist and the audience tag is set | `web/` |
+| GUI shell, race list, race page with grid and results panel, admin page | Live at https://fb12.chimerasportstrading.com behind Cloudflare Access | `web/` |
 | GUI move and pace columns | Pushed (web 0.2.0) | `web/src/components/RunnerEvidence.tsx` |
 | GUI paper entries page, entry page and "Save as paper entry" | Pushed (web 0.3.0) | `web/src/pages/PaperPage.tsx`, `PaperEntryPage.tsx` |
 
@@ -58,8 +58,7 @@ anything else gets `401` with no detail.
 | Google ID token | `Authorization: Bearer` | Google's published certificates; audience is FB12's own URL (the host the request was sent to) or the gcloud client id that user tokens carry; email verified and on the operator list | Charles and the build agent, before the GUI exists |
 
 Team domain, audience tag and operator list are non-secret config in
-`api/config/fb12.json`. Until the team domain and audience tag are set, the
-Cloudflare path rejects everything. `saved_by` on paper entries is the email in
+`api/config/fb12.json` (set on 9 October 2026; see The GUI). `saved_by` on paper entries is the email in
 the verified credential. No CORS: the browser never calls FB12 directly.
 
 Operators: `cloud@ascotwm.com`, `admin@chimerasportstrading.com`.
@@ -155,12 +154,15 @@ Until the subdomain and its Access application exist, calls through the pages.de
 address carry no Access token and the API answers 401; the GUI shows that error
 as returned. That is expected.
 
-Access (Charles creates it after the first deploy): a self-hosted Access
-application covering the whole subdomain, the same policy as the CST portal, no
-bypass rules. Its audience tag and the team domain
-(`chimerasportstrading.cloudflareaccess.com` per the June inventory) then go into
-`api/config/fb12.json` under `access.cloudflare` and are pushed; the trigger
-redeploys the API and the Cloudflare path opens.
+Access: a self-hosted Access application covers the whole subdomain
+`fb12.chimerasportstrading.com`. The team domain is
+`chimera-cape.cloudflareaccess.com` (the June inventory's
+`chimerasportstrading.cloudflareaccess.com` is not the one in use) and the
+application's audience tag is
+`b4f8e86cf11436ee2bf009750ac3b714ea0b305101753ae2e2c0e321ed43fa4b`; both are in
+`api/config/fb12.json` under `access.cloudflare` since 9 October 2026, so the
+Cloudflare path is open. Both are non-secret: Access publishes them in its own
+login redirect.
 
 Pages: Races (date in UK time, GB and IRE toggles, pattern races only; a row opens
 the race), Race (header; total stake and commission from FB12's settings; presets

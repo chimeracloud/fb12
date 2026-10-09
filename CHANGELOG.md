@@ -2,6 +2,11 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.6.1] — 2026-10-09 — the Cloudflare path opened
+
+### Changed
+- `api/config/fb12.json`: `access.cloudflare.team_domain` = `chimera-cape.cloudflareaccess.com`, `audience_tag` = the FB12 Access application's tag. Read from Access's own login redirect on `fb12.chimerasportstrading.com`, where the token was already arriving through the Pages Function and being refused as "cloudflare access is not configured". The team domain differs from the June inventory's.
+
 ## [web 0.3.0] — 2026-10-09 — paper entries
 
 ### Added
