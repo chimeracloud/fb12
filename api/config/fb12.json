@@ -1,0 +1,34 @@
+{
+  "unit": "FB12",
+  "service_name": "fb12-dutch-api",
+  "gcp_project": "chiops",
+  "region": "europe-west1",
+  "firestore": {
+    "database": "(default)",
+    "collection": "fsu-admin-settings",
+    "document": "fb12"
+  },
+  "paper_entries_bucket": "chiops-fb12-paper-entries",
+  "racing_api": {
+    "base_url": "https://api.theracingapi.com/v1"
+  },
+  "credentials": {
+    "racing_api_username": "racingapi-username",
+    "racing_api_password": "racingapi-password"
+  },
+  "access": {
+    "cloudflare": {
+      "team_domain": "",
+      "audience_tag": ""
+    },
+    "google": {
+      "operators": [
+        "cloud@ascotwm.com",
+        "admin@chimerasportstrading.com"
+      ],
+      "extra_audiences": [
+        "32555940559.apps.googleusercontent.com"
+      ]
+    }
+  }
+}

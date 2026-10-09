@@ -1,0 +1,10 @@
+# The build context is api/. Tests MUST reach the builder: they run as a stage
+# of the Dockerfile. The runtime stage copies only the runtime folders, so tests
+# never ship in the image.
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.venv*/
+.env
+.env.*
