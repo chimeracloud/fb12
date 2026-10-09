@@ -1,10 +1,12 @@
 # FB12 — status
 
-**Unit:** FB12 Dutch (API half). **Written:** 2026-10-09 11:05 UK, by the build agent.
+**Unit:** FB12 Dutch (API half). **Written:** 2026-10-09 11:55 UK, by the build agent.
 
-**State:** Shell deployed and checked (0.1.1). Race list and race card pushed
-(0.2.0); their live check waits on the service identity switch below, because
-the default compute account cannot read the Racing API secrets.
+**State:** 0.2.0 deployed (revision `fb12-dutch-api-00005-dk9`, build c11718fb
+green). Shell checked. Race list and race card answer `502 UPSTREAM_ERROR`
+"could not read secret 'racingapi-username': PermissionDenied" because the
+service runs as the default compute account, not `fb12-sa`. Blocked on that
+switch for the step 2 live check; calculate (step 3) does not need it and is next.
 
 **Waiting for (from Charles, since 2026-10-09 10:45 UK), not blocking the next step:**
 - The service identity switched from the default compute service account to
