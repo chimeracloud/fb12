@@ -2,6 +2,17 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.9.0] — 2026-10-15 — everything saved for analysis, results figures, export (steps 3 to 5, API side)
+
+### Added
+- Every settlement carries `runners`: one row per runner with the price taken, the card price, FB12's own card price at save, the stake, the saved figures, the result's position, SP and BSP, whether it won, and the return at the price taken, at SP and at BSP. Reviews keep the positions with empty returns.
+- `GET /api/paper/stats?kind=`: running totals over settled bets, each with the number of bets behind it (bets, staked, profit, return on stake, win rate, expected profit beside actual), the cumulative profit series in off-time order, and splits by preset, by pattern race or not, and by minutes before the off.
+- `GET /api/paper/export` and `GET /api/paper/export.csv`: one row per runner per entry with every settlement field.
+- Tests on settled entries built from the real Goodwood result: rows, time bands, totals and counts, cumulative order, splits, export rows and CSV, and the endpoints.
+
+### Fixed
+- 0.8.0's build failed: the entries list gained `auto` without the response model declaring it. Declared now.
+
 ## [0.8.0 / web 0.5.0] — 2026-10-15 — settlement without clicks (step 2)
 
 ### Added

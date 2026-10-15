@@ -261,6 +261,8 @@ def test_work_out_pays_the_winner_at_saved_prices_and_at_sp_and_bsp():
     assert settlement["pnl_at_bsp"] == pytest.approx(lake["stake"] * 2.05 - 100, abs=0.01)
     assert settlement["pnl_at_bsp_after_commission"] == pytest.approx((lake["stake"] * 2.05 - 100) * 0.98, abs=0.01)
     assert settlement["bsp_pending"] is False and settlement["review_reason"] is None
+    assert [r["horse"] for r in settlement["runners"]][:2] == ["Lake Forest (GB)", "Rogue Diplomat (IRE)"]
+    assert settlement["stake_total"] == 100.0 and settlement["commission_rate"] == 0.02
 
 
 def test_work_out_bsp_pending_then_filled():

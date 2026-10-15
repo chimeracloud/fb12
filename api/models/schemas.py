@@ -221,6 +221,7 @@ class PaperListItem(Strict):
     pnl_at_bsp_after_commission: float | None
     bsp_pending: bool | None
     review_reason: str | None
+    auto: dict[str, Any] | None = None
 
 
 class PaperList(Strict):

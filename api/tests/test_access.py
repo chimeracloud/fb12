@@ -31,6 +31,9 @@ ROUTES = [
     ("GET", "/api/paper/entry"),
     ("POST", "/api/paper/entry/settle"),
     ("POST", "/api/paper/settle-due"),
+    ("GET", "/api/paper/stats"),
+    ("GET", "/api/paper/export"),
+    ("GET", "/api/paper/export.csv"),
     ("GET", "/"),
     ("GET", "/docs"),
 ]

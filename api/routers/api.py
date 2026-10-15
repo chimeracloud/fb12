@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import Response
 
 from core.auth import METHOD_GOOGLE
 from core.errors import ApiError
@@ -17,6 +18,7 @@ from models.schemas import (
 from services.dutch import calculate
 from services.move import compute_move
 from services.pace import compute_pace
+from services import analysis
 from services.recorder import parse_mode
 from datetime import date as date_type, timedelta
 
@@ -211,6 +213,36 @@ async def post_paper(body: PaperRequest, request: Request) -> Any:
 async def list_paper(request: Request, status: str | None = Query(None, description="OPEN, SETTLED or NEEDS_REVIEW"),
                      kind: str | None = Query(None, description="BET or TRIAL")) -> Any:
     return {"entries": await request.app.state.paper.list(status, kind)}
+
+
+@router.get("/paper/stats")
+async def paper_stats(request: Request, kind: str | None = Query("BET", description="BET (default) or TRIAL")) -> Any:
+    """Running totals, cumulative profit and splits over settled entries of one kind. The GUI renders, never calculates."""
+    wanted = (kind or "BET").strip().upper()
+    if wanted not in ("BET", "TRIAL"):
+        raise ApiError(400, "INVALID_INPUT", f"kind must be BET or TRIAL, not {kind!r}.")
+    return analysis.stats(await request.app.state.paper.index_items(), kind=wanted)
+
+
+@router.get("/paper/export")
+async def paper_export(request: Request, status: str | None = Query(None), kind: str | None = Query(None)) -> Any:
+    """One row per runner per entry with every settlement field, as JSON."""
+    entries = await request.app.state.paper.entries_full(status, kind)
+    rows = [row for entry in entries for row in analysis.export_rows(entry)]
+    return {"columns": analysis.COLUMNS, "rows": rows, "entries": len(entries)}
+
+
+@router.get("/paper/export.csv")
+async def paper_export_csv(request: Request, status: str | None = Query(None), kind: str | None = Query(None)) -> Response:
+    """The same rows as a CSV download."""
+    entries = await request.app.state.paper.entries_full(status, kind)
+    rows = [row for entry in entries for row in analysis.export_rows(entry)]
+    filename = analysis.export_filename(datetime.now(UK))
+    return Response(
+        content=analysis.to_csv(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"},
+    )
 
 
 @router.post("/paper/settle-due")

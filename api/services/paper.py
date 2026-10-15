@@ -289,6 +289,19 @@ class PaperStore:
         items.sort(key=lambda item: item.get("saved_at") or "", reverse=True)
         return items
 
+    async def index_items(self) -> list[dict[str, Any]]:
+        index = await self._load_index()
+        return list(index.values())
+
+    async def entries_full(self, status: str | None = None, kind: str | None = None) -> list[dict[str, Any]]:
+        """Every entry object (without the raw responses), newest first, for the export."""
+        items = await self.list(status, kind)
+        entries = []
+        for item in items:
+            entry = await self._read_entry(item["entry_id"])
+            entries.append({k: v for k, v in entry.items() if k != "raw_card"})
+        return entries
+
     async def _read_entry(self, entry_id: str) -> dict[str, Any]:
         try:
             entry = await get_json(self.store, entry_key(entry_id))
@@ -444,6 +457,55 @@ class PaperStore:
         }
 
     @staticmethod
+    def runner_rows(entry: dict[str, Any], result: dict[str, Any] | None, settled: bool) -> list[dict[str, Any]]:
+        """One row per runner in the entry: what was taken, what the result says, what it returned."""
+        inputs = {r["horse_id"]: r for r in entry["inputs"].get("runners") or []}
+        by_id = {r.get("horse_id"): r for r in (result or {}).get("runners") or []}
+        rows: list[dict[str, Any]] = []
+        for f in entry["figures"]["runners"]:
+            inp = inputs.get(f["horse_id"], {})
+            res = by_id.get(f["horse_id"])
+            position = str(res.get("position") or "").strip() if res else None
+            won = position == "1" if res else None
+            stake = float(f["stake"]) if f.get("stake") is not None else 0.0
+            sp_dec = to_float(res.get("sp_dec")) if res else None
+            bsp = to_float(res.get("bsp")) if res else None
+
+            def returned(price: float | None) -> float | None:
+                if not settled or won is None:
+                    return None
+                if not won:
+                    return 0.0
+                return _round(stake * price) if price else None
+
+            rows.append({
+                "horse_id": f["horse_id"],
+                "horse": f["horse"],
+                "tier": f["tier"],
+                "part_fraction": inp.get("part_fraction"),
+                "price_taken": f.get("price"),
+                "card_price": inp.get("card_price"),
+                "card_price_at_save": inp.get("card_price_at_save"),
+                "price_edited": inp.get("price_edited"),
+                "stake": _round(stake),
+                "return_if_wins": f.get("return_if_wins"),
+                "net_if_wins": f.get("net_if_wins"),
+                "market_chance": f.get("market_chance"),
+                "break_even_chance": f.get("break_even_chance"),
+                "wins_wiped_out": f.get("wins_wiped_out"),
+                "in_result": res is not None,
+                "position": position or None,
+                "sp": res.get("sp") if res else None,
+                "sp_dec": sp_dec,
+                "bsp": bsp,
+                "won": won,
+                "return_at_price_taken": returned(f.get("price")),
+                "return_at_sp": returned(sp_dec),
+                "return_at_bsp": returned(bsp),
+            })
+        return rows
+
+    @staticmethod
     def work_out(entry: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
         """The settlement from the saved stakes and prices and the result. Pure."""
         total = float(entry["inputs"]["stake_total"])
@@ -459,6 +521,7 @@ class PaperStore:
                 "winners": [w.get("horse") for w in winners], "pnl": None, "pnl_after_commission": None,
                 "pnl_at_sp": None, "pnl_at_sp_after_commission": None, "pnl_at_bsp": None, "pnl_at_bsp_after_commission": None, "bsp_pending": None,
                 "review_reason": reason, "settled_at": now_iso(),
+                "runners": PaperStore.runner_rows(entry, result, settled=False),
             }
 
         non_runner_text = str(result.get("non_runners") or "").lower()
@@ -507,6 +570,10 @@ class PaperStore:
             "review_reason": None,
             "note": "; ".join(notes) if notes else None,
             "settled_at": now_iso(),
+            "stake_total": _round(total),
+            "commission_rate": commission,
+            "expected_profit_gbp": entry.get("expected_profit_gbp"),
+            "runners": PaperStore.runner_rows(entry, result, settled=True),
         }
 
     @staticmethod
