@@ -1,15 +1,15 @@
 # FB12 — status
 
-**Unit:** FB12 Dutch (both halves). **Written:** 2026-10-15 15:19 UK, by the build agent.
+**Unit:** FB12 Dutch (both halves). **Written:** 2026-10-15 15:21 UK, by the build agent.
 
 **State:** paper bets built through all five steps of the 9 October brief: bets
 at live prices with a slip, trials for typed prices, no bets after the off
 (0.7.0, live and proven on the Pride Stakes bet); settlement without clicks via
 `POST /api/paper/settle-due` (0.8.0); per-runner settlement rows, the results
 figures and the CSV and JSON export (0.9.0); the GUI's bet slip, entries record,
-results page and download (web 0.4.0 to 0.6.0). 0.8.0's build failed on a
-response model and was fixed in 0.9.0, whose build result is being read from
-GitHub's checks.
+results page and download (web 0.4.0 to 0.6.0). API 0.9.0 is deployed (Cloud
+Build green, read from GitHub's checks) and web 0.6.0 is built on `fb12-dutch`.
+0.8.0's build had failed on a response model; 0.9.0 fixed it.
 
 **Blocked on (from Charles):**
 - Since 2026-10-15 15:19 UK: `gcloud auth login` on this Mac. The gcloud session expired, so
