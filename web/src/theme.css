@@ -82,6 +82,8 @@ tr.locked td { color: var(--cream-dim); opacity: 0.6; }
 .summary .stat { display: flex; flex-direction: column; }
 .summary .label { font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cream-dim); }
 .summary .value { font-family: var(--font-mono); font-size: 1.35rem; }
+.summary .stat .small { margin-top: 0.1rem; }
+a.badge { cursor: pointer; }
 details.drawer summary { cursor: pointer; color: var(--gold); font-size: 0.8rem; }
 .raw { columns: 2; column-gap: 1.5rem; font-size: 0.8rem; margin-top: 0.4rem; }
 .raw div { break-inside: avoid; display: flex; gap: 0.5rem; padding: 0.1rem 0; border-bottom: 1px dotted var(--line); }

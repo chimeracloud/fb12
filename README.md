@@ -178,8 +178,12 @@ button reads "Save trial" and the entry is marked a trial; after the off the bet
 button is disabled and the API refuses anyway), Paper entries (filter by status
 and by bets or trials; placed time, minutes before the off, who placed it, the
 preset, staked, expected and actual P&L; Settle and Fetch BSP; a row opens the
-entry with its tiers, prices, figures and result), Admin (health, status, the
-settings form built from the field definitions, config, logs, live stream).
+entry with its tiers, prices, figures and result), Results (running totals over
+settled bets with the number of bets behind each, expected beside actual, a
+cumulative profit chart, splits by preset, pattern and time before the off,
+every bet with its outcome, a trials view, and the CSV download), Admin (health,
+status, the settings form built from the field definitions, config, logs, live
+stream).
 
 ## Repository layout
 
@@ -211,8 +215,8 @@ web/
   src/api/client.ts    same-origin fetch with the error envelope
   src/api/types.ts     the contract as TypeScript types
   src/lib/format.ts    money with losses in brackets, odds, percents, UK time
-  src/pages/           RaceListPage, RacePage, PaperPage, PaperEntryPage, AdminPage
-  src/components/      ResultsPanel, RunnerEvidence (move and pace cells), SettingsFormView, RawDrawer, ErrorBox
+  src/pages/           RaceListPage, RacePage, PaperPage, PaperEntryPage, ResultsPage, AdminPage
+  src/components/      ResultsPanel, RunnerEvidence (move and pace cells), CumulativeChart, SettingsFormView, RawDrawer, ErrorBox
   src/theme.css        the Chimera dark theme
 ```
 

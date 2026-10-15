@@ -286,3 +286,44 @@ export interface PaperEntry {
     non_runners: string | null;
   } | null;
 }
+
+export interface StatValue {
+  value: number | null;
+  n: number;
+}
+
+export interface SplitRow {
+  key: string;
+  n: number;
+  bets: number | null;
+  staked: number | null;
+  profit: number | null;
+  profit_at_prices_taken: number | null;
+  profit_at_sp: number | null;
+  profit_at_sp_after_commission: number | null;
+  profit_at_bsp: number | null;
+  profit_at_bsp_after_commission: number | null;
+  return_on_stake_pct: number | null;
+  win_rate_pct: number | null;
+  winning_bets: number | null;
+  expected_profit: number | null;
+  expected_minus_actual: number | null;
+}
+
+export interface CumulativePoint {
+  entry_id: string;
+  off_dt: string | null;
+  race_name: string | null;
+  course: string | null;
+  winner: string | null;
+  pnl: number | null;
+  cumulative: number | null;
+  expected: number | null;
+}
+
+export interface PaperStats {
+  scope: { kind: string; statuses: string[]; settled: number; open: number; needs_review: number; trials: number; bsp_pending: number };
+  totals: Record<string, StatValue>;
+  cumulative: CumulativePoint[];
+  splits: { preset: SplitRow[]; pattern: SplitRow[]; minutes_before_off: SplitRow[] };
+}

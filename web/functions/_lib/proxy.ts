@@ -4,7 +4,7 @@ import { API_URL } from "../_config";
 // Cloudflare adds to requests that passed Access. Any Authorization header or cookie the
 // browser sends is dropped. Status and body come back unchanged; streams stay streams.
 const FORWARD_REQUEST_HEADERS = ["content-type", "accept", "cf-access-jwt-assertion", "last-event-id"];
-const FORWARD_RESPONSE_HEADERS = ["content-type", "cache-control", "www-authenticate", "x-accel-buffering"];
+const FORWARD_RESPONSE_HEADERS = ["content-type", "cache-control", "www-authenticate", "x-accel-buffering", "content-disposition"];
 
 export async function proxy(request: Request): Promise<Response> {
   const incoming = new URL(request.url);

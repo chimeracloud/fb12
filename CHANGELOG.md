@@ -2,6 +2,12 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [web 0.6.0] — 2026-10-15 — results page and export (steps 4 and 5, GUI side)
+
+### Added
+- Results page: running totals above the list (bets, total staked, profit after commission, return on stake, how often a bet made money, expected profit beside actual and the gap, profit at SP and at BSP), each with the number of bets behind it; a cumulative profit chart (one series, zero baseline, hover for the bet behind each point, the final value labelled); splits by preset, by pattern race or not, and by time before the off; every bet listed with its outcome; a toggle to view trials the same way; "Download CSV", one row per runner per bet with every settlement field.
+- The Pages Function passes `Content-Disposition` through so the CSV downloads with its filename.
+
 ## [0.9.0] — 2026-10-15 — everything saved for analysis, results figures, export (steps 3 to 5, API side)
 
 ### Added
