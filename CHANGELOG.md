@@ -2,6 +2,13 @@
 
 All notable changes to FB12, both halves. Dates are UK dates. Newest first.
 
+## [0.8.0 / web 0.5.0] — 2026-10-15 — settlement without clicks (step 2)
+
+### Added
+- `POST /api/paper/settle-due` (operator only): settles every open entry whose race is off once its result is published, records each attempt under the entry's `auto`, and refreshes BSP on settled entries from 06:00 UK the next morning, at most hourly. For a Cloud Scheduler job every 5 minutes (`fb12-settle-due`). Manual settle stays.
+- GUI: the entries page says so and shows the last automatic check per entry.
+- Tests: the due rules (grace after the off, BSP window, hourly retry, attempt cap), settling after the off with and without a result, BSP filled the next morning, operator only.
+
 ## [0.7.0 / web 0.4.0] — 2026-10-09 — paper bets (step 1)
 
 ### Added

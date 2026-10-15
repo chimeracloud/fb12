@@ -61,6 +61,7 @@ export default function PaperPage() {
   return (
     <div>
       <h1>Paper entries</h1>
+      <p className="small muted">Open bets settle themselves once the result is published, checked every 5 minutes after the off; BSP fills in the next morning. Settle here is the fallback.</p>
       <div className="toolbar">
         <label className="field">
           Status
@@ -147,6 +148,11 @@ export default function PaperPage() {
                 <td>
                   <span className={"badge" + (entry.status === "NEEDS_REVIEW" ? " warn" : "")}>{entry.status.replace("_", " ")}</span>
                   {entry.bsp_pending && <span className="badge"> BSP pending</span>}
+                  {entry.auto?.last_attempt_at && (
+                    <div className="small muted" title={entry.auto.last_outcome ?? ""}>
+                      auto: checked {ukDateTime(entry.auto.last_attempt_at)}
+                    </div>
+                  )}
                 </td>
                 <td className="num">{money(entry.stake_total)}</td>
                 <td className="num">{signed(entry.expected_profit_gbp)}</td>

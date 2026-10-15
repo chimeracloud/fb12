@@ -245,6 +245,7 @@ export interface PaperListItem {
   pnl_at_bsp_after_commission: number | null;
   bsp_pending: boolean | null;
   review_reason: string | null;
+  auto: { attempts?: number; bsp_attempts?: number; last_attempt_at?: string; last_outcome?: string } | null;
 }
 
 export interface SettleResponse {

@@ -213,6 +213,15 @@ async def list_paper(request: Request, status: str | None = Query(None, descript
     return {"entries": await request.app.state.paper.list(status, kind)}
 
 
+@router.post("/paper/settle-due")
+async def settle_due(request: Request) -> Any:
+    """Operator only (Cloud Scheduler every 5 minutes): settles open entries after the off and fills BSP later."""
+    credential = getattr(request.state, "credential", None)
+    if credential is None or credential.method != METHOD_GOOGLE:
+        raise ApiError(401, "UNAUTHENTICATED", "Not authenticated.")
+    return await request.app.state.paper.settle_due(by=credential.email)
+
+
 @router.get("/paper/{entry_id}")
 async def get_paper(entry_id: str, request: Request) -> Any:
     _check_entry_id(entry_id)

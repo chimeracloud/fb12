@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time as time_of_day, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from core.errors import ApiError
@@ -36,6 +37,10 @@ STATUSES = (STATUS_OPEN, STATUS_SETTLED, STATUS_NEEDS_REVIEW)
 KIND_BET = "BET"
 KIND_TRIAL = "TRIAL"
 PRESETS = ("top_two", "four_horses", "custom")
+UK = ZoneInfo("Europe/London")
+BSP_RETRY_MINUTES = 60
+BSP_MAX_ATTEMPTS = 48
+RESULT_GRACE_MINUTES = 1
 
 
 
@@ -139,6 +144,7 @@ class PaperStore:
             "pnl_at_bsp_after_commission": settlement.get("pnl_at_bsp_after_commission"),
             "bsp_pending": settlement.get("bsp_pending"),
             "review_reason": settlement.get("review_reason"),
+            "auto": entry.get("auto"),
         }
 
     async def _write(self, entry: dict[str, Any]) -> None:
@@ -325,6 +331,98 @@ class PaperStore:
         log(logger, logging.INFO, "paper entry settled", entry_id=entry_id, status=entry["status"],
             winner=entry["settlement"].get("winner"), pnl=entry["settlement"].get("pnl"), bsp_pending=entry["settlement"].get("bsp_pending"))
         return self._settle_response(entry)
+
+    # --- settlement without clicks ---------------------------------------------------
+
+    @staticmethod
+    def bsp_window_opens(off: datetime) -> datetime:
+        """BSP lands the next morning: from 06:00 UK on the day after the off."""
+        next_day = off.astimezone(UK).date() + timedelta(days=1)
+        return datetime.combine(next_day, time_of_day(6, 0), tzinfo=UK)
+
+    def _due(self, item: dict[str, Any], now: datetime) -> tuple[bool, str]:
+        """Whether an index item is due a settle attempt now, and why or why not."""
+        off = parse_off_dt(item.get("off_dt"))
+        if off is None:
+            return False, "no off time"
+        auto = item.get("auto") or {}
+        last = parse_off_dt(auto.get("last_attempt_at"))
+        if item.get("status") == STATUS_OPEN:
+            if now < off + timedelta(minutes=RESULT_GRACE_MINUTES):
+                return False, "not off yet"
+            return True, "open after the off"
+        if item.get("status") == STATUS_SETTLED and item.get("bsp_pending"):
+            opens = self.bsp_window_opens(off)
+            if now < opens:
+                return False, f"BSP window opens {opens.isoformat()}"
+            if int(auto.get("bsp_attempts", 0)) >= BSP_MAX_ATTEMPTS:
+                return False, "BSP attempts exhausted"
+            if last is not None and now - last < timedelta(minutes=BSP_RETRY_MINUTES):
+                return False, "BSP tried within the last hour"
+            return True, "BSP pending"
+        return False, "nothing to do"
+
+    async def _note_attempt(self, entry_id: str, auto: dict[str, Any]) -> None:
+        entry = await self._read_entry(entry_id)
+        entry["auto"] = auto
+        await self._write(entry)
+
+    async def settle_due(self, by: str) -> dict[str, Any]:
+        """Settles every open entry whose race is off and refreshes BSP on settled entries once
+        the next morning has come. Called by Cloud Scheduler every 5 minutes; manual settle stays."""
+        now = datetime.now(UTC)
+        index = await self._load_index()
+        settled: list[dict[str, Any]] = []
+        filled: list[str] = []
+        waiting: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        skipped = 0
+        for entry_id, item in sorted(index.items()):
+            due, why = self._due(item, now)
+            if not due:
+                skipped += 1
+                continue
+            auto = dict(item.get("auto") or {"attempts": 0, "bsp_attempts": 0})
+            auto["last_attempt_at"] = now.isoformat()
+            auto["last_attempt_by"] = by
+            refreshing_bsp = item.get("status") == STATUS_SETTLED
+            if refreshing_bsp:
+                auto["bsp_attempts"] = int(auto.get("bsp_attempts", 0)) + 1
+            else:
+                auto["attempts"] = int(auto.get("attempts", 0)) + 1
+            try:
+                response = await self.settle(entry_id)
+            except ApiError as exc:
+                auto["last_outcome"] = f"{exc.code}: {exc.message}"
+                await self._note_attempt(entry_id, auto)
+                if exc.code == "NO_RESULT_YET":
+                    waiting.append({"entry_id": entry_id, "why": why, "message": exc.message})
+                else:
+                    errors.append({"entry_id": entry_id, "message": exc.message})
+                continue
+            auto["last_outcome"] = response["status"] + (" (BSP pending)" if response.get("bsp_pending") else "")
+            await self._note_attempt(entry_id, auto)
+            if refreshing_bsp:
+                if response.get("bsp_pending"):
+                    waiting.append({"entry_id": entry_id, "why": "BSP still pending"})
+                else:
+                    filled.append(entry_id)
+            else:
+                settled.append(response)
+        summary = {
+            "checked_at": now.isoformat(),
+            "entries": len(index),
+            "due": len(settled) + len(filled) + len(waiting) + len(errors),
+            "skipped": skipped,
+            "settled": settled,
+            "bsp_filled": filled,
+            "waiting": waiting,
+            "errors": errors,
+        }
+        if settled or filled or errors:
+            log(logger, logging.INFO, "settle-due run", settled=[x["entry_id"] for x in settled], bsp_filled=filled,
+                waiting=len(waiting), errors=len(errors))
+        return summary
 
     @staticmethod
     def _summary(result: dict[str, Any]) -> dict[str, Any]:
